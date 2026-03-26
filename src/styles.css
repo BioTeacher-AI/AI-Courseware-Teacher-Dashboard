@@ -14,25 +14,32 @@ body {
 }
 
 .page-shell {
-  max-width: 1100px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 24px 16px 56px;
 }
 
 .header-card,
+.mode-switch-card,
 .filter-panel,
 .summary-card,
 .answer-card,
 .student-card,
+.question-group-card,
 .state-card {
   background: #fff;
   border-radius: 14px;
   box-shadow: 0 8px 24px rgba(18, 33, 63, 0.08);
 }
 
+.header-card,
+.mode-switch-card,
+.filter-panel {
+  padding: 20px;
+}
+
 .header-card {
-  padding: 24px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .header-card h1 {
@@ -45,11 +52,31 @@ body {
   color: #3f506f;
 }
 
+.mode-switch-card {
+  margin-bottom: 14px;
+}
+
+.mode-title,
+.panel-title {
+  margin: 0 0 10px;
+  font-weight: 700;
+  color: #273f6d;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
+}
+
+.summary-grid.three-col {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .summary-card {
@@ -70,14 +97,16 @@ body {
 }
 
 .filter-panel {
-  padding: 18px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .filter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
+}
+
+.filter-grid.two-col {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 label {
@@ -134,20 +163,16 @@ button {
   color: #1e315a;
 }
 
-.result-count {
-  margin: 12px 0 0;
-  font-weight: 600;
-  color: #2f4473;
-}
-
 .answer-list,
-.student-group-list {
+.student-group-list,
+.question-group-section {
   display: grid;
   gap: 14px;
 }
 
 .answer-card,
-.student-card {
+.student-card,
+.question-group-card {
   padding: 16px;
 }
 
@@ -177,7 +202,8 @@ button {
   color: #1c6a51;
 }
 
-.question-id {
+.question-id,
+.question-badge {
   margin: 12px 0 8px;
   display: inline-block;
   padding: 3px 8px;
@@ -211,16 +237,27 @@ button {
   color: #49608b;
 }
 
-.student-answers {
+.student-answers,
+.question-answer-list {
   display: grid;
   gap: 10px;
 }
 
-.student-answer-item {
+.student-answer-item,
+.question-answer-item {
   background: #f9fbff;
   border: 1px solid #e8eef9;
   border-radius: 10px;
   padding: 12px;
+}
+
+.question-group-header h3 {
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+
+.student-name {
+  font-weight: 700;
 }
 
 .state-card {
@@ -253,12 +290,14 @@ button {
   }
 
   .left-actions,
-  .view-toggle {
+  .view-toggle,
+  .mode-toggle {
     width: 100%;
   }
 
   .left-actions button,
-  .view-toggle button {
+  .view-toggle button,
+  .mode-toggle button {
     flex: 1;
   }
 }

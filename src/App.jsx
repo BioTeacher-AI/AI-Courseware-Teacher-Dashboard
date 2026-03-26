@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 const API_URL = import.meta.env.VITE_GOOGLE_SCRIPT_READ_URL;
 
-const LESSON_OPTIONS = ['all', 'lesson1', 'lesson2', 'lesson3'];
+const LESSON_OPTIONS = ['lesson1', 'lesson2', 'lesson3'];
 const SECTION_OPTIONS = [
-  'all',
   '생각열기',
   '예상하기',
   '관찰하기',
@@ -19,11 +18,14 @@ const SECTION_OPTIONS = [
   '호흡계 설명하기'
 ];
 
-const INITIAL_FILTERS = {
+const INITIAL_STUDENT_FILTERS = {
   name: '',
-  studentId: '',
-  lesson: 'all',
-  section: 'all'
+  studentId: ''
+};
+
+const INITIAL_LESSON_SECTION_FILTERS = {
+  lesson: 'lesson1',
+  section: '생각열기'
 };
 
 function formatTimestamp(timestamp) {
@@ -51,9 +53,15 @@ function App() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filters, setFilters] = useState(INITIAL_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState(INITIAL_FILTERS);
-  const [viewMode, setViewMode] = useState('byAnswer');
+
+  const [queryMode, setQueryMode] = useState('student');
+  const [studentFilters, setStudentFilters] = useState(INITIAL_STUDENT_FILTERS);
+  const [appliedStudentFilters, setAppliedStudentFilters] = useState(INITIAL_STUDENT_FILTERS);
+
+  const [lessonSectionFilters, setLessonSectionFilters] = useState(INITIAL_LESSON_SECTION_FILTERS);
+  const [appliedLessonSectionFilters, setAppliedLessonSectionFilters] = useState(INITIAL_LESSON_SECTION_FILTERS);
+
+  const [studentViewMode, setStudentViewMode] = useState('byAnswer');
 
   useEffect(() => {
     let ignore = false;
@@ -83,7 +91,7 @@ function App() {
         if (!ignore) {
           setRows(data);
         }
-      } catch (err) {
+      } catch {
         if (!ignore) {
           setError('답안을 불러오지 못했습니다. API 설정을 확인해주세요.');
           setRows([]);
@@ -101,31 +109,25 @@ function App() {
     };
   }, []);
 
-  const filteredRows = useMemo(() => {
-    const nameKeyword = appliedFilters.name.trim().toLowerCase();
-    const idKeyword = appliedFilters.studentId.trim().toLowerCase();
+  const studentFilteredRows = useMemo(() => {
+    const nameKeyword = appliedStudentFilters.name.trim().toLowerCase();
+    const idKeyword = appliedStudentFilters.studentId.trim().toLowerCase();
 
     const matched = rows.filter((row) => {
       const rowName = String(row.name ?? '').toLowerCase();
       const rowId = String(row.studentId ?? '').toLowerCase();
-      const rowLesson = String(row.lesson ?? '');
-      const rowSection = String(row.section ?? '');
-
       const matchName = !nameKeyword || rowName.includes(nameKeyword);
       const matchId = !idKeyword || rowId.includes(idKeyword);
-      const matchLesson = appliedFilters.lesson === 'all' || rowLesson === appliedFilters.lesson;
-      const matchSection = appliedFilters.section === 'all' || rowSection === appliedFilters.section;
-
-      return matchName && matchId && matchLesson && matchSection;
+      return matchName && matchId;
     });
 
     return sortByLatest(matched);
-  }, [rows, appliedFilters]);
+  }, [rows, appliedStudentFilters]);
 
   const groupedByStudent = useMemo(() => {
     const groups = new Map();
 
-    filteredRows.forEach((row) => {
+    studentFilteredRows.forEach((row) => {
       const key = `${row.studentId || ''}__${row.name || ''}`;
       if (!groups.has(key)) {
         groups.set(key, {
@@ -137,32 +139,76 @@ function App() {
       groups.get(key).answers.push(row);
     });
 
-    return [...groups.values()].sort((a, b) => b.answers.length - a.answers.length);
-  }, [filteredRows]);
+    return [...groups.values()].sort((a, b) => {
+      const nameCompare = a.name.localeCompare(b.name, 'ko-KR');
+      return nameCompare !== 0 ? nameCompare : a.studentId.localeCompare(b.studentId, 'ko-KR');
+    });
+  }, [studentFilteredRows]);
 
-  const summary = useMemo(() => {
-    const uniqueStudentIds = new Set(rows.map((row) => String(row.studentId ?? '')));
+  const lessonSectionFilteredRows = useMemo(() => {
+    return rows.filter((row) => {
+      return (
+        String(row.lesson ?? '') === appliedLessonSectionFilters.lesson &&
+        String(row.section ?? '') === appliedLessonSectionFilters.section
+      );
+    });
+  }, [rows, appliedLessonSectionFilters]);
+
+  const groupedByQuestion = useMemo(() => {
+    const grouped = lessonSectionFilteredRows.reduce((acc, row) => {
+      const key = String(row.questionId ?? '질문없음');
+      if (!acc[key]) {
+        acc[key] = {
+          questionId: row.questionId || '-',
+          questionText: row.questionText || '(질문 없음)',
+          answers: []
+        };
+      }
+      acc[key].answers.push(row);
+      return acc;
+    }, {});
+
+    return Object.values(grouped)
+      .sort((a, b) => a.questionId.localeCompare(b.questionId, 'ko-KR'))
+      .map((group) => ({
+        ...group,
+        answers: [...group.answers].sort((a, b) => {
+          const nameCompare = String(a.name ?? '').localeCompare(String(b.name ?? ''), 'ko-KR');
+          if (nameCompare !== 0) return nameCompare;
+          return String(a.studentId ?? '').localeCompare(String(b.studentId ?? ''), 'ko-KR');
+        })
+      }));
+  }, [lessonSectionFilteredRows]);
+
+  const studentSummary = useMemo(() => {
+    const lessons = new Set(studentFilteredRows.map((row) => String(row.lesson ?? '')));
+    const sections = new Set(studentFilteredRows.map((row) => String(row.section ?? '')));
+
     return {
-      totalAnswers: rows.length,
-      totalStudents: uniqueStudentIds.size,
-      lesson1Count: rows.filter((row) => row.lesson === 'lesson1').length,
-      lesson2Count: rows.filter((row) => row.lesson === 'lesson2').length,
-      lesson3Count: rows.filter((row) => row.lesson === 'lesson3').length,
-      filteredCount: filteredRows.length
+      answerCount: studentFilteredRows.length,
+      lessonCount: [...lessons].filter(Boolean).length,
+      sectionCount: [...sections].filter(Boolean).length
     };
-  }, [rows, filteredRows.length]);
+  }, [studentFilteredRows]);
 
-  const onFilterChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+  const lessonSectionSummary = useMemo(() => {
+    return {
+      answerCount: lessonSectionFilteredRows.length,
+      studentCount: new Set(lessonSectionFilteredRows.map((row) => String(row.studentId ?? ''))).size,
+      questionCount: new Set(lessonSectionFilteredRows.map((row) => String(row.questionId ?? ''))).size
+    };
+  }, [lessonSectionFilteredRows]);
+
+  const onApplyStudentFilters = () => setAppliedStudentFilters(studentFilters);
+  const onResetStudentFilters = () => {
+    setStudentFilters(INITIAL_STUDENT_FILTERS);
+    setAppliedStudentFilters(INITIAL_STUDENT_FILTERS);
   };
 
-  const onSearch = () => {
-    setAppliedFilters(filters);
-  };
-
-  const onReset = () => {
-    setFilters(INITIAL_FILTERS);
-    setAppliedFilters(INITIAL_FILTERS);
+  const onApplyLessonSectionFilters = () => setAppliedLessonSectionFilters(lessonSectionFilters);
+  const onResetLessonSectionFilters = () => {
+    setLessonSectionFilters(INITIAL_LESSON_SECTION_FILTERS);
+    setAppliedLessonSectionFilters(INITIAL_LESSON_SECTION_FILTERS);
   };
 
   return (
@@ -172,117 +218,173 @@ function App() {
         <p>학생들이 각 차시와 활동 단계에서 작성한 답안을 조회할 수 있습니다.</p>
       </header>
 
-      <section className="summary-grid">
-        <article className="summary-card">
-          <p className="summary-label">전체 답안 수</p>
-          <p className="summary-value">{summary.totalAnswers}</p>
-        </article>
-        <article className="summary-card">
-          <p className="summary-label">학생 수(중복 제거)</p>
-          <p className="summary-value">{summary.totalStudents}</p>
-        </article>
-        <article className="summary-card">
-          <p className="summary-label">1차시 답안 수</p>
-          <p className="summary-value">{summary.lesson1Count}</p>
-        </article>
-        <article className="summary-card">
-          <p className="summary-label">2차시 답안 수</p>
-          <p className="summary-value">{summary.lesson2Count}</p>
-        </article>
-        <article className="summary-card">
-          <p className="summary-label">3차시 답안 수</p>
-          <p className="summary-value">{summary.lesson3Count}</p>
-        </article>
+      <section className="mode-switch-card">
+        <p className="mode-title">조회 모드</p>
+        <div className="mode-toggle">
+          <button
+            type="button"
+            className={queryMode === 'student' ? 'btn-primary' : 'btn-secondary'}
+            onClick={() => setQueryMode('student')}
+          >
+            학생별 조회
+          </button>
+          <button
+            type="button"
+            className={queryMode === 'lessonSection' ? 'btn-primary' : 'btn-secondary'}
+            onClick={() => setQueryMode('lessonSection')}
+          >
+            차시/단계별 조회
+          </button>
+        </div>
       </section>
 
-      <section className="filter-panel">
-        <div className="filter-grid">
-          <label>
-            이름 검색
-            <input
-              type="text"
-              placeholder="예: 김민지"
-              value={filters.name}
-              onChange={(e) => onFilterChange('name', e.target.value)}
-            />
-          </label>
+      {queryMode === 'student' && (
+        <>
+          <section className="summary-grid three-col">
+            <article className="summary-card">
+              <p className="summary-label">해당 학생 답안 수</p>
+              <p className="summary-value">{studentSummary.answerCount}</p>
+            </article>
+            <article className="summary-card">
+              <p className="summary-label">작성한 차시 수</p>
+              <p className="summary-value">{studentSummary.lessonCount}</p>
+            </article>
+            <article className="summary-card">
+              <p className="summary-label">작성한 단계 수</p>
+              <p className="summary-value">{studentSummary.sectionCount}</p>
+            </article>
+          </section>
 
-          <label>
-            학번 검색
-            <input
-              type="text"
-              placeholder="예: 2401"
-              value={filters.studentId}
-              onChange={(e) => onFilterChange('studentId', e.target.value)}
-            />
-          </label>
+          <section className="filter-panel">
+            <p className="panel-title">학생별 조회 필터</p>
+            <div className="filter-grid two-col">
+              <label>
+                이름 검색
+                <input
+                  type="text"
+                  placeholder="예: 김민지"
+                  value={studentFilters.name}
+                  onChange={(e) => setStudentFilters((prev) => ({ ...prev, name: e.target.value }))}
+                />
+              </label>
 
-          <label>
-            차시 선택
-            <select value={filters.lesson} onChange={(e) => onFilterChange('lesson', e.target.value)}>
-              {LESSON_OPTIONS.map((lesson) => (
-                <option key={lesson} value={lesson}>
-                  {lesson === 'all' ? '전체' : lesson}
-                </option>
-              ))}
-            </select>
-          </label>
+              <label>
+                학번 검색
+                <input
+                  type="text"
+                  placeholder="예: 2401"
+                  value={studentFilters.studentId}
+                  onChange={(e) => setStudentFilters((prev) => ({ ...prev, studentId: e.target.value }))}
+                />
+              </label>
+            </div>
 
-          <label>
-            활동 단계 선택
-            <select value={filters.section} onChange={(e) => onFilterChange('section', e.target.value)}>
-              {SECTION_OPTIONS.map((section) => (
-                <option key={section} value={section}>
-                  {section === 'all' ? '전체' : section}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+            <div className="actions-row">
+              <div className="left-actions">
+                <button type="button" className="btn-primary" onClick={onApplyStudentFilters}>
+                  조회
+                </button>
+                <button type="button" className="btn-secondary" onClick={onResetStudentFilters}>
+                  초기화
+                </button>
+              </div>
 
-        <div className="actions-row">
-          <div className="left-actions">
-            <button type="button" className="btn-primary" onClick={onSearch}>
-              조회
-            </button>
-            <button type="button" className="btn-secondary" onClick={onReset}>
-              초기화
-            </button>
-          </div>
+              <div className="view-toggle">
+                <button
+                  type="button"
+                  className={studentViewMode === 'byAnswer' ? 'btn-primary' : 'btn-secondary'}
+                  onClick={() => setStudentViewMode('byAnswer')}
+                >
+                  답안별 보기
+                </button>
+                <button
+                  type="button"
+                  className={studentViewMode === 'byStudent' ? 'btn-primary' : 'btn-secondary'}
+                  onClick={() => setStudentViewMode('byStudent')}
+                >
+                  학생별 묶음 보기
+                </button>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
 
-          <div className="view-toggle">
-            <button
-              type="button"
-              className={viewMode === 'byAnswer' ? 'btn-primary' : 'btn-secondary'}
-              onClick={() => setViewMode('byAnswer')}
-            >
-              답안별 보기
-            </button>
-            <button
-              type="button"
-              className={viewMode === 'byStudent' ? 'btn-primary' : 'btn-secondary'}
-              onClick={() => setViewMode('byStudent')}
-            >
-              학생별 보기
-            </button>
-          </div>
-        </div>
+      {queryMode === 'lessonSection' && (
+        <>
+          <section className="summary-grid three-col">
+            <article className="summary-card">
+              <p className="summary-label">현재 조건의 전체 답안 수</p>
+              <p className="summary-value">{lessonSectionSummary.answerCount}</p>
+            </article>
+            <article className="summary-card">
+              <p className="summary-label">참여 학생 수</p>
+              <p className="summary-value">{lessonSectionSummary.studentCount}</p>
+            </article>
+            <article className="summary-card">
+              <p className="summary-label">질문 수</p>
+              <p className="summary-value">{lessonSectionSummary.questionCount}</p>
+            </article>
+          </section>
 
-        <p className="result-count">현재 필터 결과: {summary.filteredCount}건</p>
-      </section>
+          <section className="filter-panel">
+            <p className="panel-title">차시/단계별 조회 필터</p>
+            <div className="filter-grid two-col">
+              <label>
+                차시 선택
+                <select
+                  value={lessonSectionFilters.lesson}
+                  onChange={(e) => setLessonSectionFilters((prev) => ({ ...prev, lesson: e.target.value }))}
+                >
+                  {LESSON_OPTIONS.map((lesson) => (
+                    <option key={lesson} value={lesson}>
+                      {lesson}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                단계 선택
+                <select
+                  value={lessonSectionFilters.section}
+                  onChange={(e) => setLessonSectionFilters((prev) => ({ ...prev, section: e.target.value }))}
+                >
+                  {SECTION_OPTIONS.map((section) => (
+                    <option key={section} value={section}>
+                      {section}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="actions-row">
+              <div className="left-actions">
+                <button type="button" className="btn-primary" onClick={onApplyLessonSectionFilters}>
+                  조회
+                </button>
+                <button type="button" className="btn-secondary" onClick={onResetLessonSectionFilters}>
+                  초기화
+                </button>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
 
       {loading && <section className="state-card loading">답안을 불러오는 중입니다...</section>}
       {!loading && error && <section className="state-card error">{error}</section>}
 
-      {!loading && !error && (
+      {!loading && !error && queryMode === 'student' && (
         <section className="answers-section">
-          {filteredRows.length === 0 && (
+          {studentFilteredRows.length === 0 && (
             <article className="state-card empty">조건에 맞는 학생 답안이 없습니다.</article>
           )}
 
-          {filteredRows.length > 0 && viewMode === 'byAnswer' && (
+          {studentFilteredRows.length > 0 && studentViewMode === 'byAnswer' && (
             <div className="answer-list">
-              {filteredRows.map((row, idx) => (
+              {studentFilteredRows.map((row, idx) => (
                 <article className="answer-card" key={`${row.timestamp}-${row.studentId}-${row.questionId}-${idx}`}>
                   <div className="answer-meta">
                     <span>{row.name || '-'}</span>
@@ -299,7 +401,7 @@ function App() {
             </div>
           )}
 
-          {filteredRows.length > 0 && viewMode === 'byStudent' && (
+          {studentFilteredRows.length > 0 && studentViewMode === 'byStudent' && (
             <div className="student-group-list">
               {groupedByStudent.map((group) => (
                 <article className="student-card" key={`${group.studentId}-${group.name}`}>
@@ -326,6 +428,36 @@ function App() {
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {!loading && !error && queryMode === 'lessonSection' && (
+        <section className="question-group-section">
+          {groupedByQuestion.length === 0 && (
+            <article className="state-card empty">선택한 차시와 단계에 해당하는 학생 답안이 없습니다.</article>
+          )}
+
+          {groupedByQuestion.map((group) => (
+            <article className="question-group-card" key={group.questionId}>
+              <div className="question-group-header">
+                <span className="question-badge">{group.questionId}</span>
+                <h3>{group.questionText}</h3>
+              </div>
+
+              <div className="question-answer-list">
+                {group.answers.map((row, idx) => (
+                  <div className="question-answer-item" key={`${row.studentId}-${row.timestamp}-${idx}`}>
+                    <div className="answer-meta">
+                      <span className="student-name">{row.name || '-'}</span>
+                      <span>{row.studentId || '-'}</span>
+                      <span>{formatTimestamp(row.timestamp)}</span>
+                    </div>
+                    <p className="answer-text">{row.answer || '(답안 없음)'}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
         </section>
       )}
     </div>
