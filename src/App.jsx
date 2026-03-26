@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-const API_URL = import.meta.env.VITE_GOOGLE_SCRIPT_READ_URL;
+const API_URL = '/.netlify/functions/read-answers';
 
 const LESSON_OPTIONS = ['lesson1', 'lesson2', 'lesson3'];
 const SECTION_OPTIONS = [
@@ -67,33 +67,28 @@ function App() {
     let ignore = false;
 
     async function fetchRows() {
-      if (!API_URL) {
-        setError('답안을 불러오지 못했습니다. API 설정을 확인해주세요. (VITE_GOOGLE_SCRIPT_READ_URL 누락)');
-        setLoading(false);
-        return;
-      }
-
       try {
         setLoading(true);
         setError('');
 
         const res = await fetch(API_URL, { cache: 'no-store' });
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
+          throw new Error(`API 요청 실패: ${res.status}`);
         }
 
         const json = await res.json();
-        if (!json?.ok) {
-          throw new Error('API 응답 ok=false');
+        if (json?.ok === false) {
+          throw new Error(json?.message || '학생 답안을 불러오지 못했습니다.');
         }
 
-        const data = Array.isArray(json.data) ? json.data : [];
+        const data = Array.isArray(json?.data) ? json.data : [];
         if (!ignore) {
           setRows(data);
         }
-      } catch {
+      } catch (err) {
+        console.error('답안 조회 오류:', err);
         if (!ignore) {
-          setError('답안을 불러오지 못했습니다. API 설정을 확인해주세요.');
+          setError('학생 답안을 불러오지 못했습니다. API 설정을 확인해주세요.');
           setRows([]);
         }
       } finally {
