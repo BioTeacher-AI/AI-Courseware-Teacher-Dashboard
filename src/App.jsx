@@ -22,6 +22,13 @@ const INITIAL_STUDENT_FILTERS = { name: '', studentId: '' };
 const INITIAL_LESSON_SECTION_FILTERS = { lesson: 'lesson1', section: '생각열기' };
 
 const SURVEY_PROXY_BASE = '/.netlify/functions/proxy-survey';
+const REMEDIAL_API_URL = '/.netlify/functions/recommend-remedial-lesson';
+
+const LESSON_TOPIC_MAP = {
+  lesson1: { label: '1차시', topic: '소화계' },
+  lesson2: { label: '2차시', topic: '순환계·호흡계' },
+  lesson3: { label: '3차시', topic: '배설계' }
+};
 
 function formatTimestamp(timestamp) {
   if (!timestamp) return '-';
@@ -139,6 +146,72 @@ function getTeacherSuggestion(status, domainLabel) {
   return '비교 가능한 데이터가 부족합니다. 해당 학생의 사전/사후 기록 입력 여부를 확인해보실 수 있습니다.';
 }
 
+function inferLessonFromRow(row) {
+  const rawLesson = String(row?.lesson ?? '').toLowerCase().trim();
+  if (LESSON_TOPIC_MAP[rawLesson]) return rawLesson;
+
+  const text = `${row?.questionText ?? ''} ${row?.questionId ?? ''} ${row?.answer ?? ''}`.toLowerCase();
+  if (/소화|영양소|흡수/.test(text)) return 'lesson1';
+  if (/순환|호흡|심박|기체/.test(text)) return 'lesson2';
+  if (/배설|콩팥|여과|오줌/.test(text)) return 'lesson3';
+  return null;
+}
+
+function buildRemedialInput(studentComparison) {
+  if (!studentComparison) return null;
+
+  const preCounts = { lesson1: 0, lesson2: 0, lesson3: 0 };
+  const postCounts = { lesson1: 0, lesson2: 0, lesson3: 0 };
+
+  studentComparison.preRows.forEach((row) => {
+    const lessonKey = inferLessonFromRow(row);
+    if (lessonKey) preCounts[lessonKey] += 1;
+  });
+  studentComparison.postRows.forEach((row) => {
+    const lessonKey = inferLessonFromRow(row);
+    if (lessonKey) postCounts[lessonKey] += 1;
+  });
+
+  const lessonSummary = Object.keys(LESSON_TOPIC_MAP).map((lessonKey) => {
+    const pre = preCounts[lessonKey] || 0;
+    const post = postCounts[lessonKey] || 0;
+    const delta = post - pre;
+    const status = delta > 0 ? '혼동 증가 가능성' : delta < 0 ? '혼동 감소' : '변화 없음';
+    return {
+      lesson_key: lessonKey,
+      lesson: LESSON_TOPIC_MAP[lessonKey].label,
+      topic: LESSON_TOPIC_MAP[lessonKey].topic,
+      pre_confusion_count: pre,
+      post_confusion_count: post,
+      delta,
+      status
+    };
+  });
+
+  const remainingConfusion = lessonSummary.filter((item) => item.post_confusion_count > 0);
+
+  return {
+    student: {
+      name: studentComparison.name,
+      studentId: studentComparison.studentId
+    },
+    score_summary: {
+      pre_average: studentComparison.preAvg,
+      post_average: studentComparison.postAvg,
+      delta: studentComparison.delta,
+      status: studentComparison.status
+    },
+    lesson_summary: lessonSummary,
+    improved_concepts: lessonSummary
+      .filter((item) => item.delta < 0)
+      .map((item) => `${item.lesson} ${item.topic}`),
+    unchanged_concepts: lessonSummary
+      .filter((item) => item.delta === 0)
+      .map((item) => `${item.lesson} ${item.topic}`),
+    remaining_confusions: remainingConfusion.map((item) => `${item.lesson} ${item.topic}`)
+  };
+}
+
 function buildStudentComparisons(preRows, postRows) {
   const map = new Map();
 
@@ -213,6 +286,7 @@ function App() {
   const [taskState, setTaskState] = useState({ loading: false, error: '', warning: '', preRows: [], postRows: [] });
   const [compareFilters, setCompareFilters] = useState({ name: '', studentId: '' });
   const [selectedStudentKey, setSelectedStudentKey] = useState('');
+  const [remedialState, setRemedialState] = useState({ loading: false, error: '', warning: '', byStudentKey: {} });
 
   useEffect(() => {
     let ignore = false;
@@ -395,6 +469,8 @@ function App() {
     [filteredMisconceptionComparisons, selectedStudentKey]
   );
 
+  const selectedRemedial = selectedMisconception ? remedialState.byStudentKey[selectedMisconception.key] : null;
+
   const mergedMotivationTask = useMemo(() => {
     const map = new Map();
 
@@ -419,6 +495,51 @@ function App() {
   const onResetLessonSectionFilters = () => {
     setLessonSectionFilters(INITIAL_LESSON_SECTION_FILTERS);
     setAppliedLessonSectionFilters(INITIAL_LESSON_SECTION_FILTERS);
+  };
+
+  const onRecommendRemedial = async () => {
+    if (!selectedMisconception) return;
+
+    const payload = buildRemedialInput(selectedMisconception);
+    if (!payload || (!payload.score_summary?.pre_average && !payload.score_summary?.post_average)) {
+      setRemedialState((prev) => ({
+        ...prev,
+        warning: '비교 가능한 데이터가 부족하여 보완 차시를 제안하기 어렵습니다.'
+      }));
+      return;
+    }
+
+    setRemedialState((prev) => ({ ...prev, loading: true, error: '', warning: '' }));
+    try {
+      const res = await fetch(REMEDIAL_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.message || 'AI 추천을 불러오지 못했습니다');
+      }
+      setRemedialState((prev) => ({
+        ...prev,
+        loading: false,
+        error: '',
+        warning: '',
+        byStudentKey: {
+          ...prev.byStudentKey,
+          [selectedMisconception.key]: json
+        }
+      }));
+    } catch (err) {
+      const message = String(err?.message || '');
+      setRemedialState((prev) => ({
+        ...prev,
+        loading: false,
+        error: message.includes('OpenAI API 환경변수가 설정되지 않았습니다')
+          ? 'OpenAI API 환경변수가 설정되지 않았습니다'
+          : 'AI 추천을 불러오지 못했습니다'
+      }));
+    }
   };
 
   return (
@@ -596,7 +717,32 @@ function App() {
                 <p><strong>변화량:</strong> {selectedMisconception.delta ?? '계산 불가'}</p>
                 <p><strong>변화 분류:</strong> {selectedMisconception.status === 'improved' ? '향상' : selectedMisconception.status === 'same' ? '유지' : selectedMisconception.status === 'declined' ? '저하' : '비교 불가'}</p>
               </div>
-              <p className="teacher-suggestion">{getTeacherSuggestion(selectedMisconception.status, '학습 성취')}</p>
+              <p className="teacher-suggestion"><strong>AI 추천 학습 제시:</strong> {getTeacherSuggestion(selectedMisconception.status, '학습 성취')}</p>
+
+              <div className="remedial-box">
+                <div className="remedial-head">
+                  <h4>AI 보완 수업 차시 제안</h4>
+                  <button type="button" className="btn-primary" onClick={onRecommendRemedial} disabled={remedialState.loading}>
+                    {remedialState.loading ? '추천 생성 중...' : '보완 차시 추천 생성'}
+                  </button>
+                </div>
+                {remedialState.warning && <p className="state-inline">{remedialState.warning}</p>}
+                {remedialState.error && <p className="state-inline error">{remedialState.error}</p>}
+                {selectedRemedial?.recommendation?.summary && (
+                  <p className="teacher-suggestion">{selectedRemedial.recommendation.summary}</p>
+                )}
+                {Array.isArray(selectedRemedial?.recommendation?.recommended_lessons) &&
+                  selectedRemedial.recommendation.recommended_lessons.map((item, idx) => (
+                    <div className="remedial-item" key={`${item.lesson}-${idx}`}>
+                      <p><strong>추천 보완 차시:</strong> {item.lesson} ({item.topic})</p>
+                      <p><strong>제안 이유:</strong> {item.reason}</p>
+                      <p><strong>지도 제안:</strong> {item.teaching_suggestion}</p>
+                    </div>
+                  ))}
+                {selectedRemedial?.raw_text && !selectedRemedial?.recommendation && (
+                  <p className="teacher-suggestion">{selectedRemedial.raw_text}</p>
+                )}
+              </div>
             </article>
           )}
 

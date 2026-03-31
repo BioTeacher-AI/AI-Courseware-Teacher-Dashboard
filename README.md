@@ -17,6 +17,9 @@ MOTIVATION_POST_API=
 
 TASK_PERSISTENCE_PRE_API=
 TASK_PERSISTENCE_POST_API=
+
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.4-nano
 ```
 
 > 호환을 위해 `VITE_MISCONCEPTION_PRE_API` 등 기존 `VITE_*` 이름도 Functions에서 fallback으로 읽을 수 있습니다.
@@ -58,3 +61,5 @@ npm run build
 - 설문/변화 분석
   - 브라우저 -> `/.netlify/functions/proxy-survey?target=...` -> 서버 환경변수 URL
   - 예시 target: `misconception-pre`, `misconception-post`, `motivation-pre`, `motivation-post`, `task-pre`, `task-post`
+- 보완 수업 차시 추천(OpenAI)
+  - 브라우저 -> `/.netlify/functions/recommend-remedial-lesson` -> OpenAI Responses API
