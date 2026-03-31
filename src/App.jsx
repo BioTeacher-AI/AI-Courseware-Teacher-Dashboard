@@ -262,8 +262,14 @@ async function fetchSurveyRows(target, signal) {
   }
 
   if (!res.ok || json?.ok === false) {
-    const details = json?.details ? ` (${json.details})` : '';
-    throw new Error(`${json?.message || '설문 데이터를 불러오지 못했습니다.'}${details}`);
+    const rawMessage = json?.message || '설문 데이터를 불러오지 못했습니다.';
+    const isHtmlError = /HTML 오류 페이지|JSON 대신 HTML/i.test(rawMessage);
+    const details = json?.details || json?.responsePreview || '';
+    const guide = isHtmlError
+      ? '웹앱 URL이 올바른 /exec 배포 주소인지, 익명 접근 권한이 열려 있는지 확인해보세요.'
+      : '';
+    const merged = [rawMessage, guide, details ? `원인 단서: ${details}` : ''].filter(Boolean).join(' ');
+    throw new Error(merged);
   }
 
   return parseRows(json);

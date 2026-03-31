@@ -51,6 +51,15 @@ function tryParseJson(text) {
   }
 }
 
+function looksLikeAppsScriptExecUrl(url) {
+  return /^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(\?.*)?$/i.test(url || '');
+}
+
+function extractHtmlTitle(html) {
+  const match = String(html || '').match(/<title>(.*?)<\/title>/i);
+  return match ? match[1].trim() : '';
+}
+
 exports.handler = async function (event) {
   if (event.httpMethod !== 'GET') {
     return {
@@ -85,6 +94,10 @@ exports.handler = async function (event) {
     };
   }
 
+  if (!looksLikeAppsScriptExecUrl(resolved.url)) {
+    console.warn('[proxy-survey] url format warning target:', target, 'env key:', resolved.key);
+  }
+
   try {
     const forwardParams = new URLSearchParams(event.queryStringParameters || {});
     forwardParams.delete('target');
@@ -104,15 +117,43 @@ exports.handler = async function (event) {
     console.log('[proxy-survey] upstream snippet:', snippet);
 
     const parsed = tryParseJson(rawText);
+    const isHtmlLike =
+      /text\/html/i.test(contentType) ||
+      /^\s*<!doctype html/i.test(rawText) ||
+      /^\s*<html/i.test(rawText);
+    const htmlTitle = isHtmlLike ? extractHtmlTitle(rawText) : '';
 
     if (!response.ok) {
       return {
         statusCode: 502,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ok: false,
+          error: true,
+          target,
           message: `${resolved.info.label} 외부 API 호출 실패: status ${response.status}`,
-          details: parsed.ok ? undefined : `응답 본문 일부: ${snippet}`
+          status: response.status,
+          contentType,
+          redirected: response.redirected,
+          responseUrl: response.url,
+          responsePreview: snippet
+        })
+      };
+    }
+
+    if (isHtmlLike) {
+      return {
+        statusCode: 502,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          error: true,
+          target,
+          message: `${target} API가 JSON 대신 HTML 오류 페이지를 반환했습니다. Apps Script 웹앱 배포 URL 또는 접근 권한을 확인하세요.`,
+          status: response.status,
+          contentType,
+          redirected: response.redirected,
+          responseUrl: response.url,
+          htmlTitle: htmlTitle || 'N/A',
+          responsePreview: snippet
         })
       };
     }
@@ -122,9 +163,14 @@ exports.handler = async function (event) {
         statusCode: 502,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ok: false,
+          error: true,
+          target,
           message: `${resolved.info.label} 응답 파싱 실패: ${parsed.error}`,
-          details: `응답 본문 일부: ${snippet}`
+          status: response.status,
+          contentType,
+          redirected: response.redirected,
+          responseUrl: response.url,
+          responsePreview: snippet
         })
       };
     }
@@ -140,7 +186,8 @@ exports.handler = async function (event) {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ok: false,
+        error: true,
+        target,
         message: '프록시 서버를 통해 데이터를 조회하는 중 오류가 발생했습니다.',
         details: error?.message || 'unknown error'
       })

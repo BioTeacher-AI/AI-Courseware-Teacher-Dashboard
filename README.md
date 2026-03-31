@@ -62,5 +62,6 @@ npm run build
 - 설문/변화 분석
   - 브라우저 -> `/.netlify/functions/proxy-survey?target=...` -> 서버 환경변수 URL
   - 예시 target: `misconception-pre`, `misconception-post`, `motivation-pre`, `motivation-post`, `task-pre`, `task-post`
+  - 프록시는 HTML 오류 페이지 응답을 감지해(예: `Unexpected token '<'`) URL/권한 점검 메시지를 반환합니다.
 - 보완 수업 차시 추천(OpenAI)
   - 브라우저 -> `/.netlify/functions/recommend-remedial-lesson` -> OpenAI Responses API
