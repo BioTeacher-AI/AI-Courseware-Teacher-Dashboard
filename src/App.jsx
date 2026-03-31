@@ -21,14 +21,7 @@ const SECTION_OPTIONS = [
 const INITIAL_STUDENT_FILTERS = { name: '', studentId: '' };
 const INITIAL_LESSON_SECTION_FILTERS = { lesson: 'lesson1', section: '생각열기' };
 
-const ANALYTICS_ENV = {
-  misconceptionPre: import.meta.env.VITE_MISCONCEPTION_PRE_API,
-  misconceptionPost: import.meta.env.VITE_MISCONCEPTION_POST_API,
-  motivationPre: import.meta.env.VITE_MOTIVATION_PRE_API,
-  motivationPost: import.meta.env.VITE_MOTIVATION_POST_API,
-  taskPre: import.meta.env.VITE_TASK_PERSISTENCE_PRE_API,
-  taskPost: import.meta.env.VITE_TASK_PERSISTENCE_POST_API
-};
+const SURVEY_PROXY_BASE = '/.netlify/functions/proxy-survey';
 
 function formatTimestamp(timestamp) {
   if (!timestamp) return '-';
@@ -182,10 +175,22 @@ function buildStudentComparisons(preRows, postRows) {
     .sort((a, b) => a.name.localeCompare(b.name, 'ko-KR') || a.studentId.localeCompare(b.studentId, 'ko-KR'));
 }
 
-async function fetchApiRows(url, signal) {
-  const res = await fetch(url, { cache: 'no-store', signal });
-  if (!res.ok) throw new Error(`API 요청 실패: ${res.status}`);
-  const json = await res.json();
+async function fetchSurveyRows(target, signal) {
+  const endpoint = `${SURVEY_PROXY_BASE}?target=${encodeURIComponent(target)}`;
+  const res = await fetch(endpoint, { cache: 'no-store', signal });
+  const text = await res.text();
+
+  let json;
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error('프록시 서버를 통해 데이터를 조회하는 중 오류가 발생했습니다.');
+  }
+
+  if (!res.ok || json?.ok === false) {
+    throw new Error(json?.message || '설문 데이터를 불러오지 못했습니다.');
+  }
+
   return parseRows(json);
 }
 
@@ -245,82 +250,51 @@ function App() {
   useEffect(() => {
     const controller = new AbortController();
 
+    async function loadPair({ preTarget, postTarget, setState, label }) {
+      setState((prev) => ({ ...prev, loading: true, error: '', warning: '' }));
+      try {
+        const [preRows, postRows] = await Promise.all([
+          fetchSurveyRows(preTarget, controller.signal),
+          fetchSurveyRows(postTarget, controller.signal)
+        ]);
+        setState({ loading: false, error: '', warning: '', preRows, postRows });
+      } catch (err) {
+        console.error(`${label} 데이터 조회 오류:`, err);
+        const message = String(err?.message || '');
+        const warning = message.includes('환경변수가 설정되지 않았습니다')
+          ? 'API 환경변수가 설정되지 않았습니다.'
+          : '';
+        setState({
+          loading: false,
+          error: warning ? '' : '설문 데이터를 불러오지 못했습니다.',
+          warning,
+          preRows: [],
+          postRows: []
+        });
+      }
+    }
+
     async function loadComparisons() {
-      const envWarning = [];
-
-      const missingMis = !ANALYTICS_ENV.misconceptionPre || !ANALYTICS_ENV.misconceptionPost;
-      if (missingMis) {
-        console.warn('학습 변화 확인 API 환경변수가 설정되지 않았습니다.');
-        setMisconceptionState((prev) => ({ ...prev, loading: false, warning: 'API 환경변수가 설정되지 않았습니다.', preRows: [], postRows: [] }));
-      } else {
-        setMisconceptionState((prev) => ({ ...prev, loading: true, error: '', warning: '' }));
-        try {
-          const [preRows, postRows] = await Promise.all([
-            fetchApiRows(ANALYTICS_ENV.misconceptionPre, controller.signal),
-            fetchApiRows(ANALYTICS_ENV.misconceptionPost, controller.signal)
-          ]);
-          setMisconceptionState({ loading: false, error: '', warning: '', preRows, postRows });
-        } catch (err) {
-          console.error('학습 변화 데이터 조회 오류:', err);
-          setMisconceptionState({
-            loading: false,
-            error: '학생 답안을 불러오지 못했습니다. API 설정을 확인해주세요.',
-            warning: '',
-            preRows: [],
-            postRows: []
-          });
-        }
-      }
-
-      const missingMot = !ANALYTICS_ENV.motivationPre || !ANALYTICS_ENV.motivationPost;
-      if (missingMot) {
-        console.warn('동기 변화 API 환경변수가 설정되지 않았습니다.');
-        setMotivationState((prev) => ({ ...prev, loading: false, warning: 'API 환경변수가 설정되지 않았습니다.', preRows: [], postRows: [] }));
-      } else {
-        setMotivationState((prev) => ({ ...prev, loading: true, error: '', warning: '' }));
-        try {
-          const [preRows, postRows] = await Promise.all([
-            fetchApiRows(ANALYTICS_ENV.motivationPre, controller.signal),
-            fetchApiRows(ANALYTICS_ENV.motivationPost, controller.signal)
-          ]);
-          setMotivationState({ loading: false, error: '', warning: '', preRows, postRows });
-        } catch (err) {
-          console.error('동기 데이터 조회 오류:', err);
-          setMotivationState({
-            loading: false,
-            error: '학생 답안을 불러오지 못했습니다. API 설정을 확인해주세요.',
-            warning: '',
-            preRows: [],
-            postRows: []
-          });
-        }
-      }
-
-      const missingTask = !ANALYTICS_ENV.taskPre || !ANALYTICS_ENV.taskPost;
-      if (missingTask) {
-        console.warn('과제집착력 API 환경변수가 설정되지 않았습니다.');
-        setTaskState((prev) => ({ ...prev, loading: false, warning: 'API 환경변수가 설정되지 않았습니다.', preRows: [], postRows: [] }));
-      } else {
-        setTaskState((prev) => ({ ...prev, loading: true, error: '', warning: '' }));
-        try {
-          const [preRows, postRows] = await Promise.all([
-            fetchApiRows(ANALYTICS_ENV.taskPre, controller.signal),
-            fetchApiRows(ANALYTICS_ENV.taskPost, controller.signal)
-          ]);
-          setTaskState({ loading: false, error: '', warning: '', preRows, postRows });
-        } catch (err) {
-          console.error('과제집착력 데이터 조회 오류:', err);
-          setTaskState({
-            loading: false,
-            error: '학생 답안을 불러오지 못했습니다. API 설정을 확인해주세요.',
-            warning: '',
-            preRows: [],
-            postRows: []
-          });
-        }
-      }
-
-      if (envWarning.length) console.warn(envWarning.join('\n'));
+      await Promise.all([
+        loadPair({
+          preTarget: 'misconception-pre',
+          postTarget: 'misconception-post',
+          setState: setMisconceptionState,
+          label: '학습 변화'
+        }),
+        loadPair({
+          preTarget: 'motivation-pre',
+          postTarget: 'motivation-post',
+          setState: setMotivationState,
+          label: '동기'
+        }),
+        loadPair({
+          preTarget: 'task-pre',
+          postTarget: 'task-post',
+          setState: setTaskState,
+          label: '과제집착력'
+        })
+      ]);
     }
 
     loadComparisons();
@@ -659,7 +633,7 @@ function App() {
 
           {(motivationState.loading || taskState.loading) && <article className="state-card loading">동기/과제집착력 데이터를 불러오는 중입니다...</article>}
           {(motivationState.warning || taskState.warning) && <article className="state-card empty">API 환경변수가 설정되지 않았습니다.</article>}
-          {(motivationState.error || taskState.error) && <article className="state-card error">학생 답안을 불러오지 못했습니다. API 설정을 확인해주세요.</article>}
+          {(motivationState.error || taskState.error) && <article className="state-card error">설문 데이터를 불러오지 못했습니다.</article>}
 
           {!motivationState.loading && !taskState.loading && !motivationState.error && !taskState.error && !motivationState.warning && !taskState.warning && (
             <>
