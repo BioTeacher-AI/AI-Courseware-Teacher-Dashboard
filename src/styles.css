@@ -14,7 +14,7 @@ body {
 }
 
 .page-shell {
-  max-width: 1120px;
+  max-width: 1180px;
   margin: 0 auto;
   padding: 24px 16px 56px;
 }
@@ -26,7 +26,8 @@ body {
 .answer-card,
 .student-card,
 .question-group-card,
-.state-card {
+.state-card,
+.insight-card {
   background: #fff;
   border-radius: 14px;
   box-shadow: 0 8px 24px rgba(18, 33, 63, 0.08);
@@ -105,8 +106,9 @@ body {
   gap: 10px;
 }
 
-.filter-grid.two-col {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+.filter-grid.two-col,
+.filter-grid.three-col-input {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
 label {
@@ -165,14 +167,17 @@ button {
 
 .answer-list,
 .student-group-list,
-.question-group-section {
+.question-group-section,
+.analytics-section,
+.double-card-grid {
   display: grid;
   gap: 14px;
 }
 
 .answer-card,
 .student-card,
-.question-group-card {
+.question-group-card,
+.insight-card {
   padding: 16px;
 }
 
@@ -258,6 +263,50 @@ button {
 
 .student-name {
   font-weight: 700;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(18, 33, 63, 0.08);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #e4ebf7;
+  vertical-align: top;
+}
+
+th {
+  background: #f3f7ff;
+  color: #26457d;
+}
+
+.teacher-suggestion {
+  margin-top: 12px;
+  border-left: 4px solid #2a5fc0;
+  background: #f4f8ff;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.double-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .state-card {
