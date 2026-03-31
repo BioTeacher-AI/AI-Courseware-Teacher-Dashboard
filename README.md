@@ -53,6 +53,7 @@ npm run build
 - Build command: `npm run build`
 - Publish directory: `dist`
 - Functions directory: `netlify/functions`
+- Deploy Preview에서도 동일 환경변수를 사용하도록 Netlify UI에서 Preview context에 변수 주입을 확인하세요.
 
 ## API 호출 구조
 

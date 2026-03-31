@@ -1,20 +1,54 @@
 const TARGET_ENV_MAP = {
-  'misconception-pre': ['MISCONCEPTION_PRE_API', 'VITE_MISCONCEPTION_PRE_API'],
-  'misconception-post': ['MISCONCEPTION_POST_API', 'VITE_MISCONCEPTION_POST_API'],
-  'motivation-pre': ['MOTIVATION_PRE_API', 'VITE_MOTIVATION_PRE_API'],
-  'motivation-post': ['MOTIVATION_POST_API', 'VITE_MOTIVATION_POST_API'],
-  'task-pre': ['TASK_PERSISTENCE_PRE_API', 'VITE_TASK_PERSISTENCE_PRE_API'],
-  'task-post': ['TASK_PERSISTENCE_POST_API', 'VITE_TASK_PERSISTENCE_POST_API']
+  'misconception-pre': {
+    envKeys: ['MISCONCEPTION_PRE_API', 'VITE_MISCONCEPTION_PRE_API'],
+    label: '오개념 사전'
+  },
+  'misconception-post': {
+    envKeys: ['MISCONCEPTION_POST_API', 'VITE_MISCONCEPTION_POST_API'],
+    label: '오개념 사후'
+  },
+  'motivation-pre': {
+    envKeys: ['MOTIVATION_PRE_API', 'VITE_MOTIVATION_PRE_API'],
+    label: '동기 사전'
+  },
+  'motivation-post': {
+    envKeys: ['MOTIVATION_POST_API', 'VITE_MOTIVATION_POST_API'],
+    label: '동기 사후'
+  },
+  'task-pre': {
+    envKeys: ['TASK_PERSISTENCE_PRE_API', 'VITE_TASK_PERSISTENCE_PRE_API'],
+    label: '과제집착 사전'
+  },
+  'task-post': {
+    envKeys: ['TASK_PERSISTENCE_POST_API', 'VITE_TASK_PERSISTENCE_POST_API'],
+    label: '과제집착 사후'
+  }
 };
 
-function resolveTargetUrl(target) {
-  const candidates = TARGET_ENV_MAP[target] || [];
-  for (const key of candidates) {
+function resolveTarget(target) {
+  const info = TARGET_ENV_MAP[target];
+  if (!info) return { info: null, key: null, url: null };
+
+  for (const key of info.envKeys) {
     if (process.env[key]) {
-      return { key, url: process.env[key] };
+      return { info, key, url: process.env[key] };
     }
   }
-  return { key: candidates[0] || null, url: null };
+
+  return { info, key: info.envKeys[0], url: null };
+}
+
+function truncate(value, max = 260) {
+  if (!value) return '';
+  return value.length > max ? `${value.slice(0, max)}...` : value;
+}
+
+function tryParseJson(text) {
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
 }
 
 exports.handler = async function (event) {
@@ -29,7 +63,8 @@ exports.handler = async function (event) {
   const target = event.queryStringParameters?.target;
   console.log('[proxy-survey] target:', target || '(none)');
 
-  if (!target || !TARGET_ENV_MAP[target]) {
+  const resolved = resolveTarget(target);
+  if (!resolved.info) {
     return {
       statusCode: 400,
       headers: { 'Content-Type': 'application/json' },
@@ -37,13 +72,16 @@ exports.handler = async function (event) {
     };
   }
 
-  const resolved = resolveTargetUrl(target);
+  console.log('[proxy-survey] env key:', resolved.key, 'exists:', Boolean(resolved.url));
+
   if (!resolved.url) {
-    console.warn('[proxy-survey] missing env for target:', target, 'expected:', resolved.key);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: false, message: 'API 환경변수가 설정되지 않았습니다.' })
+      body: JSON.stringify({
+        ok: false,
+        message: `target=${target} (${resolved.info.label}) 에 대한 환경변수가 설정되지 않았습니다.`
+      })
     };
   }
 
@@ -58,16 +96,43 @@ exports.handler = async function (event) {
       cache: 'no-store'
     });
 
-    console.log('[proxy-survey] upstream status:', response.status, 'target:', target);
+    const contentType = response.headers.get('content-type') || 'unknown';
+    const rawText = await response.text();
+    const snippet = truncate(rawText);
 
-    const text = await response.text();
+    console.log('[proxy-survey] upstream status:', response.status, 'content-type:', contentType);
+    console.log('[proxy-survey] upstream snippet:', snippet);
+
+    const parsed = tryParseJson(rawText);
+
+    if (!response.ok) {
+      return {
+        statusCode: 502,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ok: false,
+          message: `${resolved.info.label} 외부 API 호출 실패: status ${response.status}`,
+          details: parsed.ok ? undefined : `응답 본문 일부: ${snippet}`
+        })
+      };
+    }
+
+    if (!parsed.ok) {
+      return {
+        statusCode: 502,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ok: false,
+          message: `${resolved.info.label} 응답 파싱 실패: ${parsed.error}`,
+          details: `응답 본문 일부: ${snippet}`
+        })
+      };
+    }
+
     return {
-      statusCode: response.status,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      body: text
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ok: true, data: parsed.value })
     };
   } catch (error) {
     console.error('[proxy-survey] fetch error target:', target, 'message:', error?.message);
@@ -76,7 +141,8 @@ exports.handler = async function (event) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ok: false,
-        message: '프록시 서버를 통해 데이터를 조회하는 중 오류가 발생했습니다.'
+        message: '프록시 서버를 통해 데이터를 조회하는 중 오류가 발생했습니다.',
+        details: error?.message || 'unknown error'
       })
     };
   }

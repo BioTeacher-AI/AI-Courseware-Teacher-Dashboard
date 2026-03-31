@@ -54,6 +54,7 @@ function sortByLatest(rows) {
 function parseRows(json) {
   if (Array.isArray(json)) return json;
   if (Array.isArray(json?.data)) return json.data;
+  if (json?.data && typeof json.data === 'object') return parseRows(json.data);
   if (Array.isArray(json?.rows)) return json.rows;
   if (Array.isArray(json?.result)) return json.result;
   return [];
@@ -261,7 +262,8 @@ async function fetchSurveyRows(target, signal) {
   }
 
   if (!res.ok || json?.ok === false) {
-    throw new Error(json?.message || '설문 데이터를 불러오지 못했습니다.');
+    const details = json?.details ? ` (${json.details})` : '';
+    throw new Error(`${json?.message || '설문 데이터를 불러오지 못했습니다.'}${details}`);
   }
 
   return parseRows(json);
@@ -340,7 +342,7 @@ function App() {
           : '';
         setState({
           loading: false,
-          error: warning ? '' : '설문 데이터를 불러오지 못했습니다.',
+          error: warning ? '' : `${label} 데이터를 불러오지 못했습니다: ${message || '상세 원인 없음'}`,
           warning,
           preRows: [],
           postRows: []
@@ -779,7 +781,11 @@ function App() {
 
           {(motivationState.loading || taskState.loading) && <article className="state-card loading">동기/과제집착력 데이터를 불러오는 중입니다...</article>}
           {(motivationState.warning || taskState.warning) && <article className="state-card empty">API 환경변수가 설정되지 않았습니다.</article>}
-          {(motivationState.error || taskState.error) && <article className="state-card error">설문 데이터를 불러오지 못했습니다.</article>}
+          {(motivationState.error || taskState.error) && (
+            <article className="state-card error">
+              {motivationState.error || taskState.error}
+            </article>
+          )}
 
           {!motivationState.loading && !taskState.loading && !motivationState.error && !taskState.error && !motivationState.warning && !taskState.warning && (
             <>
