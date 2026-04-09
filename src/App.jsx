@@ -292,6 +292,7 @@ function App() {
   const [misconceptionState, setMisconceptionState] = useState({ loading: false, error: '', warning: '', preRows: [], postRows: [] });
   const [motivationState, setMotivationState] = useState({ loading: false, error: '', warning: '', preRows: [], postRows: [] });
   const [taskState, setTaskState] = useState({ loading: false, error: '', warning: '', preRows: [], postRows: [] });
+  const [loadedFlags, setLoadedFlags] = useState({ misconception: false, motivation: false, task: false });
   const [compareFilters, setCompareFilters] = useState({ name: '', studentId: '' });
   const [selectedStudentKey, setSelectedStudentKey] = useState('');
   const [remedialState, setRemedialState] = useState({ loading: false, error: '', warning: '', byStudentKey: {} });
@@ -330,9 +331,45 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (topTab !== 'learningChange' || loadedFlags.misconception) return;
     const controller = new AbortController();
 
-    async function loadPair({ preTarget, postTarget, setState, label }) {
+    async function loadMisconception() {
+      setMisconceptionState((prev) => ({ ...prev, loading: true, error: '', warning: '' }));
+      try {
+        const [preRows, postRows] = await Promise.all([
+          fetchSurveyRows('misconception-pre', controller.signal),
+          fetchSurveyRows('misconception-post', controller.signal)
+        ]);
+        setMisconceptionState({ loading: false, error: '', warning: '', preRows, postRows });
+      } catch (err) {
+        console.error('학습 변화 데이터 조회 오류:', err);
+        const message = String(err?.message || '');
+        const warning = message.includes('환경변수가 설정되지 않았습니다')
+          ? 'API 환경변수가 설정되지 않았습니다.'
+          : '';
+        setMisconceptionState({
+          loading: false,
+          error: warning ? '' : `학습 변화 데이터를 불러오지 못했습니다: ${message || '상세 원인 없음'}`,
+          warning,
+          preRows: [],
+          postRows: []
+        });
+      } finally {
+        setLoadedFlags((prev) => ({ ...prev, misconception: true }));
+      }
+    }
+
+    loadMisconception();
+    return () => controller.abort();
+  }, [topTab, loadedFlags.misconception]);
+
+  useEffect(() => {
+    if (topTab !== 'motivationTask') return;
+    const controller = new AbortController();
+
+    async function loadPairOnce({ key, preTarget, postTarget, setState, label }) {
+      if (loadedFlags[key]) return;
       setState((prev) => ({ ...prev, loading: true, error: '', warning: '' }));
       try {
         const [preRows, postRows] = await Promise.all([
@@ -353,35 +390,27 @@ function App() {
           preRows: [],
           postRows: []
         });
+      } finally {
+        setLoadedFlags((prev) => ({ ...prev, [key]: true }));
       }
     }
 
-    async function loadComparisons() {
-      await Promise.all([
-        loadPair({
-          preTarget: 'misconception-pre',
-          postTarget: 'misconception-post',
-          setState: setMisconceptionState,
-          label: '학습 변화'
-        }),
-        loadPair({
-          preTarget: 'motivation-pre',
-          postTarget: 'motivation-post',
-          setState: setMotivationState,
-          label: '동기'
-        }),
-        loadPair({
-          preTarget: 'task-pre',
-          postTarget: 'task-post',
-          setState: setTaskState,
-          label: '과제집착력'
-        })
-      ]);
-    }
-
-    loadComparisons();
+    loadPairOnce({
+      key: 'motivation',
+      preTarget: 'motivation-pre',
+      postTarget: 'motivation-post',
+      setState: setMotivationState,
+      label: '동기'
+    });
+    loadPairOnce({
+      key: 'task',
+      preTarget: 'task-pre',
+      postTarget: 'task-post',
+      setState: setTaskState,
+      label: '과제집착력'
+    });
     return () => controller.abort();
-  }, []);
+  }, [topTab, loadedFlags]);
 
   const studentFilteredRows = useMemo(() => {
     const nameKeyword = appliedStudentFilters.name.trim().toLowerCase();
