@@ -31,6 +31,12 @@ const LESSON_TOPIC_MAP = {
   lesson3: { label: '3차시', topic: '배설계' }
 };
 
+const DASHBOARD_TABS = [
+  { key: 'answers', label: '답안 조회' },
+  { key: 'learningChange', label: '학습 변화 확인' },
+  { key: 'motivationTask', label: '동기 및 과제집착력 수준 변화' }
+];
+
 function formatTimestamp(timestamp) {
   if (!timestamp) return '-';
   const date = new Date(timestamp);
@@ -346,6 +352,13 @@ function App() {
   const [selectedStudentKey, setSelectedStudentKey] = useState('');
   const [remedialState, setRemedialState] = useState({ loading: false, error: '', warning: '', byStudentKey: {} });
   const [motivationNameFilter, setMotivationNameFilter] = useState('');
+
+  useEffect(() => {
+    const validTabKeys = DASHBOARD_TABS.map((tab) => tab.key);
+    if (!validTabKeys.includes(topTab)) {
+      setTopTab('answers');
+    }
+  }, [topTab]);
 
   useEffect(() => {
     let ignore = false;
@@ -688,15 +701,16 @@ function App() {
       <section className="mode-switch-card">
         <p className="mode-title">대시보드 탭</p>
         <div className="mode-toggle">
-          <button type="button" className={topTab === 'answers' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTopTab('answers')}>
-            답안 조회
-          </button>
-          <button type="button" className={topTab === 'learningChange' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTopTab('learningChange')}>
-            학습 변화 확인
-          </button>
-          <button type="button" className={topTab === 'motivationTask' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTopTab('motivationTask')}>
-            동기 및 과제집착력 수준 변화
-          </button>
+          {DASHBOARD_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={topTab === tab.key ? 'btn-primary' : 'btn-secondary'}
+              onClick={() => setTopTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </section>
 
