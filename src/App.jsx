@@ -76,6 +76,13 @@ function toNumber(value) {
   return Number.isFinite(num) ? num : null;
 }
 
+function formatNumber(value, digits = 2) {
+  const parsed = toNumber(value);
+  if (parsed === null || !Number.isFinite(parsed)) return '-';
+  const fixedDigits = Number.isInteger(digits) && digits >= 0 ? digits : 2;
+  return parsed.toFixed(fixedDigits);
+}
+
 function getByKeysInsensitive(row, keys) {
   const keyMap = Object.keys(row || {}).reduce((acc, key) => {
     acc[key.toLowerCase()] = row[key];
