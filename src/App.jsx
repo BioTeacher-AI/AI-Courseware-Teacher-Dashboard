@@ -148,6 +148,20 @@ function getTeacherSuggestion(status, domainLabel) {
   return '비교 가능한 데이터가 부족합니다. 해당 학생의 사전/사후 기록 입력 여부를 확인해보실 수 있습니다.';
 }
 
+function interpretScientificConfidence(diff) {
+  if (diff === null) return '비교 가능한 데이터가 부족해 과학적 개념 확신도의 변화를 판단하기 어렵습니다.';
+  if (diff > 0) return '사전 대비 사후 평균이 상승하여 과학적으로 타당한 개념에 대한 확신이 높아진 것으로 볼 수 있습니다.';
+  if (diff < 0) return '사전 대비 사후 평균이 하락하여 과학적 개념 확신이 낮아졌을 가능성이 있어 추가 설명이 필요해 보입니다.';
+  return '사전·사후 평균이 동일하여 과학적 개념 확신도의 큰 변화는 관찰되지 않습니다.';
+}
+
+function interpretMisconceptionConfidence(diff) {
+  if (diff === null) return '비교 가능한 데이터가 부족해 오개념 확신도의 변화를 판단하기 어렵습니다.';
+  if (diff < 0) return '사전 대비 사후 평균이 낮아져 오개념에 대한 확신이 줄어든 것으로 해석할 수 있습니다.';
+  if (diff > 0) return '사전 대비 사후 평균이 높아져 일부 오개념이 유지되거나 강화되었을 가능성이 있습니다.';
+  return '사전·사후 평균이 동일하여 오개념 확신도 변화는 크지 않습니다.';
+}
+
 function inferLessonFromText(text) {
   const raw = String(text || '').toLowerCase();
   if (/소화|영양소|흡수/.test(raw)) return 'lesson1';
@@ -791,14 +805,55 @@ function App() {
             <article className="insight-card">
               <h3>{selectedMisconception.name} ({selectedMisconception.studentId || '학번 없음'})</h3>
               <div className="insight-grid">
-                <p><strong>사전 평균 점수:</strong> {selectedMisconception.preAvg ?? '데이터 없음'}</p>
-                <p><strong>사후 평균 점수:</strong> {selectedMisconception.postAvg ?? '데이터 없음'}</p>
-                <p><strong>변화량:</strong> {selectedMisconception.delta ?? '계산 불가'}</p>
-                <p><strong>변화 분류:</strong> {selectedMisconception.status === 'improved' ? '향상' : selectedMisconception.status === 'same' ? '유지' : selectedMisconception.status === 'declined' ? '저하' : '비교 불가'}</p>
+                <p><strong>과학적 개념 확신도(사전):</strong> {selectedMisconception.preScientificAverage ?? '데이터 없음'}</p>
+                <p><strong>과학적 개념 확신도(사후):</strong> {selectedMisconception.postScientificAverage ?? '데이터 없음'}</p>
+                <p><strong>과학적 개념 변화량:</strong> {selectedMisconception.scientificDifference ?? '계산 불가'}</p>
+                <p><strong>오개념 확신도(사전):</strong> {selectedMisconception.preMisconceptionAverage ?? '데이터 없음'}</p>
+                <p><strong>오개념 확신도(사후):</strong> {selectedMisconception.postMisconceptionAverage ?? '데이터 없음'}</p>
+                <p><strong>오개념 변화량:</strong> {selectedMisconception.misconceptionDifference ?? '계산 불가'}</p>
                 <p><strong>오개념 문항 수:</strong> 사전 {selectedMisconception.preMisconceptionItems?.length ?? 0} / 사후 {selectedMisconception.postMisconceptionItems?.length ?? 0}</p>
                 <p><strong>과학적 개념 문항 수:</strong> 사전 {selectedMisconception.preScientificItems?.length ?? 0} / 사후 {selectedMisconception.postScientificItems?.length ?? 0}</p>
               </div>
               <p className="teacher-suggestion"><strong>AI 추천 학습 제시:</strong> {getTeacherSuggestion(selectedMisconception.status, '학습 성취')}</p>
+              <p className="teacher-suggestion"><strong>과학적 개념 해석:</strong> {interpretScientificConfidence(selectedMisconception.scientificDifference)}</p>
+              <p className="teacher-suggestion"><strong>오개념 해석:</strong> {interpretMisconceptionConfidence(selectedMisconception.misconceptionDifference)}</p>
+
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>문항명</th>
+                      <th>문항 유형</th>
+                      <th>사전</th>
+                      <th>사후</th>
+                      <th>변화량</th>
+                      <th>해석</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedMisconception.scientificDetails?.map((item, idx) => (
+                      <tr key={`sci-${idx}`}>
+                        <td>{item.question}</td>
+                        <td>{item.type}</td>
+                        <td>{item.preValue ?? '-'}</td>
+                        <td>{item.postValue ?? '-'}</td>
+                        <td>{item.difference ?? '-'}</td>
+                        <td>{item.status}</td>
+                      </tr>
+                    ))}
+                    {selectedMisconception.misconceptionDetails?.map((item, idx) => (
+                      <tr key={`mis-${idx}`}>
+                        <td>{item.question}</td>
+                        <td>{item.type}</td>
+                        <td>{item.preValue ?? '-'}</td>
+                        <td>{item.postValue ?? '-'}</td>
+                        <td>{item.difference ?? '-'}</td>
+                        <td>{item.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               <div className="remedial-box">
                 <div className="remedial-head">

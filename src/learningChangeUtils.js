@@ -72,6 +72,36 @@ function average(list) {
   return Number((list.reduce((acc, cur) => acc + cur, 0) / list.length).toFixed(2));
 }
 
+function indexByQuestion(items = []) {
+  const map = new Map();
+  items.forEach((item) => {
+    map.set(item.question, item.score);
+  });
+  return map;
+}
+
+function buildDetails(preItems = [], postItems = [], typeLabel) {
+  const preMap = indexByQuestion(preItems);
+  const postMap = indexByQuestion(postItems);
+  const questionSet = new Set([...preMap.keys(), ...postMap.keys()]);
+
+  return [...questionSet].map((question) => {
+    const preValue = preMap.has(question) ? preMap.get(question) : null;
+    const postValue = postMap.has(question) ? postMap.get(question) : null;
+    const diff = preValue !== null && postValue !== null ? Number((postValue - preValue).toFixed(2)) : null;
+    const status = diff === null ? '비교 불가' : diff > 0 ? '상승' : diff < 0 ? '하락' : '동일';
+
+    return {
+      question,
+      type: typeLabel,
+      preValue,
+      postValue,
+      difference: diff,
+      status
+    };
+  });
+}
+
 function getChangeStatus(delta) {
   if (delta === null) return 'insufficient';
   if (delta > 0) return 'improved';
@@ -133,6 +163,24 @@ export function comparePrePostResults(preRows = [], postRows = []) {
     const preAvg = pre.avg;
     const postAvg = post ? post.avg : null;
     const delta = preAvg !== null && postAvg !== null ? Number((postAvg - preAvg).toFixed(2)) : null;
+    const preMisconceptionAverage = average(pre.groups.misconception.map((i) => i.score));
+    const postMisconceptionAverage = post ? average(post.groups.misconception.map((i) => i.score)) : null;
+    const misconceptionDifference =
+      preMisconceptionAverage !== null && postMisconceptionAverage !== null
+        ? Number((postMisconceptionAverage - preMisconceptionAverage).toFixed(2))
+        : null;
+
+    const preScientificAverage = average(pre.groups.scientific.map((i) => i.score));
+    const postScientificAverage = post ? average(post.groups.scientific.map((i) => i.score)) : null;
+    const scientificDifference =
+      preScientificAverage !== null && postScientificAverage !== null
+        ? Number((postScientificAverage - preScientificAverage).toFixed(2))
+        : null;
+
+    const preMisconceptionItems = pre.groups.misconception;
+    const postMisconceptionItems = post ? post.groups.misconception : [];
+    const preScientificItems = pre.groups.scientific;
+    const postScientificItems = post ? post.groups.scientific : [];
 
     results.push({
       key: pre.student.idKey || pre.student.nameKey || `unknown-pre-${results.length}`,
@@ -144,10 +192,18 @@ export function comparePrePostResults(preRows = [], postRows = []) {
       postAvg,
       delta,
       status: getChangeStatus(delta),
-      preMisconceptionItems: pre.groups.misconception,
-      postMisconceptionItems: post ? post.groups.misconception : [],
-      preScientificItems: pre.groups.scientific,
-      postScientificItems: post ? post.groups.scientific : []
+      preMisconceptionAverage,
+      postMisconceptionAverage,
+      misconceptionDifference,
+      preScientificAverage,
+      postScientificAverage,
+      scientificDifference,
+      preMisconceptionItems,
+      postMisconceptionItems,
+      preScientificItems,
+      postScientificItems,
+      misconceptionDetails: buildDetails(preMisconceptionItems, postMisconceptionItems, '오개념 문항'),
+      scientificDetails: buildDetails(preScientificItems, postScientificItems, '과학적 개념 문항')
     });
   });
 
@@ -164,10 +220,18 @@ export function comparePrePostResults(preRows = [], postRows = []) {
       postAvg: post.avg,
       delta: null,
       status: 'insufficient',
+      preMisconceptionAverage: null,
+      postMisconceptionAverage: average(post.groups.misconception.map((i) => i.score)),
+      misconceptionDifference: null,
+      preScientificAverage: null,
+      postScientificAverage: average(post.groups.scientific.map((i) => i.score)),
+      scientificDifference: null,
       preMisconceptionItems: [],
       postMisconceptionItems: post.groups.misconception,
       preScientificItems: [],
-      postScientificItems: post.groups.scientific
+      postScientificItems: post.groups.scientific,
+      misconceptionDetails: buildDetails([], post.groups.misconception, '오개념 문항'),
+      scientificDetails: buildDetails([], post.groups.scientific, '과학적 개념 문항')
     });
   });
 
