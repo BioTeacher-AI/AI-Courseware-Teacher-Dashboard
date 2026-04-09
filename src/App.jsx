@@ -875,12 +875,12 @@ function App() {
             <article className="insight-card">
               <h3>{selectedMisconception.name} ({selectedMisconception.studentId || '학번 없음'})</h3>
               <div className="insight-grid">
-                <p><strong>과학적 개념 확신도(사전):</strong> {selectedMisconception.preScientificAverage ?? '데이터 없음'}</p>
-                <p><strong>과학적 개념 확신도(사후):</strong> {selectedMisconception.postScientificAverage ?? '데이터 없음'}</p>
-                <p><strong>과학적 개념 변화량:</strong> {selectedMisconception.scientificDifference ?? '계산 불가'}</p>
-                <p><strong>오개념 확신도(사전):</strong> {selectedMisconception.preMisconceptionAverage ?? '데이터 없음'}</p>
-                <p><strong>오개념 확신도(사후):</strong> {selectedMisconception.postMisconceptionAverage ?? '데이터 없음'}</p>
-                <p><strong>오개념 변화량:</strong> {selectedMisconception.misconceptionDifference ?? '계산 불가'}</p>
+                <p><strong>과학적 개념 확신도(사전):</strong> {formatNumber(selectedMisconception.preScientificAverage)}</p>
+                <p><strong>과학적 개념 확신도(사후):</strong> {formatNumber(selectedMisconception.postScientificAverage)}</p>
+                <p><strong>과학적 개념 변화량:</strong> {formatNumber(selectedMisconception.scientificDifference)}</p>
+                <p><strong>오개념 확신도(사전):</strong> {formatNumber(selectedMisconception.preMisconceptionAverage)}</p>
+                <p><strong>오개념 확신도(사후):</strong> {formatNumber(selectedMisconception.postMisconceptionAverage)}</p>
+                <p><strong>오개념 변화량:</strong> {formatNumber(selectedMisconception.misconceptionDifference)}</p>
                 <p><strong>오개념 문항 수:</strong> 사전 {selectedMisconception.preMisconceptionItems?.length ?? 0} / 사후 {selectedMisconception.postMisconceptionItems?.length ?? 0}</p>
                 <p><strong>과학적 개념 문항 수:</strong> 사전 {selectedMisconception.preScientificItems?.length ?? 0} / 사후 {selectedMisconception.postScientificItems?.length ?? 0}</p>
               </div>
@@ -905,9 +905,9 @@ function App() {
                       <tr key={`sci-${idx}`}>
                         <td>{item.question}</td>
                         <td>{item.type}</td>
-                        <td>{item.preValue ?? '-'}</td>
-                        <td>{item.postValue ?? '-'}</td>
-                        <td>{item.difference ?? '-'}</td>
+                        <td>{formatNumber(item.preValue)}</td>
+                        <td>{formatNumber(item.postValue)}</td>
+                        <td>{formatNumber(item.difference)}</td>
                         <td>{item.status}</td>
                       </tr>
                     ))}
@@ -915,9 +915,9 @@ function App() {
                       <tr key={`mis-${idx}`}>
                         <td>{item.question}</td>
                         <td>{item.type}</td>
-                        <td>{item.preValue ?? '-'}</td>
-                        <td>{item.postValue ?? '-'}</td>
-                        <td>{item.difference ?? '-'}</td>
+                        <td>{formatNumber(item.preValue)}</td>
+                        <td>{formatNumber(item.postValue)}</td>
+                        <td>{formatNumber(item.difference)}</td>
                         <td>{item.status}</td>
                       </tr>
                     ))}
@@ -997,11 +997,11 @@ function App() {
                       <tr key={item.key}>
                         <td>{item.name} ({item.studentId || '학번 없음'})</td>
                         <td>
-                          사전 {item.preScientificAverage ?? '-'} / 사후 {item.postScientificAverage ?? '-'} / 변화량 {item.scientificDifference ?? '-'}
+                          사전 {formatNumber(item.preScientificAverage)} / 사후 {formatNumber(item.postScientificAverage)} / 변화량 {formatNumber(item.scientificDifference)}
                         </td>
                         <td>{interpretScientificConfidence(item.scientificDifference)}</td>
                         <td>
-                          사전 {item.preMisconceptionAverage ?? '-'} / 사후 {item.postMisconceptionAverage ?? '-'} / 변화량 {item.misconceptionDifference ?? '-'}
+                          사전 {formatNumber(item.preMisconceptionAverage)} / 사후 {formatNumber(item.postMisconceptionAverage)} / 변화량 {formatNumber(item.misconceptionDifference)}
                         </td>
                         <td>{interpretMisconceptionConfidence(item.misconceptionDifference)}</td>
                       </tr>
