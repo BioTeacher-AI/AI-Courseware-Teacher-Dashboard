@@ -162,6 +162,13 @@ function interpretMisconceptionConfidence(diff) {
   return '사전·사후 평균이 동일하여 오개념 확신도 변화는 크지 않습니다.';
 }
 
+function interpretEngagementChange(diff, label) {
+  if (diff === null) return `${label} 변화 데이터가 부족합니다.`;
+  if (diff > 0) return `사전 대비 사후 점수가 상승하여 ${label}이 향상된 것으로 볼 수 있습니다.`;
+  if (diff < 0) return `${label} 점수가 낮아져 추가 관찰 및 개별 지도가 필요할 수 있습니다.`;
+  return `${label} 점수 변화가 크지 않아 유지 수준으로 볼 수 있습니다.`;
+}
+
 function inferLessonFromText(text) {
   const raw = String(text || '').toLowerCase();
   if (/소화|영양소|흡수/.test(raw)) return 'lesson1';
@@ -310,7 +317,11 @@ async function fetchSurveyRows(target, signal) {
     throw new Error(merged);
   }
 
-  return parseRows(json);
+  const rows = parseRows(json);
+  return {
+    rows,
+    meta: json?.meta || { target }
+  };
 }
 
 function App() {
@@ -334,6 +345,7 @@ function App() {
   const [compareFilters, setCompareFilters] = useState({ name: '', studentId: '' });
   const [selectedStudentKey, setSelectedStudentKey] = useState('');
   const [remedialState, setRemedialState] = useState({ loading: false, error: '', warning: '', byStudentKey: {} });
+  const [motivationNameFilter, setMotivationNameFilter] = useState('');
 
   useEffect(() => {
     let ignore = false;
@@ -375,10 +387,18 @@ function App() {
     async function loadMisconception() {
       setMisconceptionState((prev) => ({ ...prev, loading: true, error: '', warning: '' }));
       try {
-        const [preRows, postRows] = await Promise.all([
+        const [preResult, postResult] = await Promise.all([
           fetchSurveyRows('misconception-pre', controller.signal),
           fetchSurveyRows('misconception-post', controller.signal)
         ]);
+        const preRows = preResult.rows;
+        const postRows = postResult.rows;
+        console.debug('[learningChange] loaded', {
+          preTarget: preResult.meta?.target,
+          postTarget: postResult.meta?.target,
+          preCount: preRows.length,
+          postCount: postRows.length
+        });
         setMisconceptionState({ loading: false, error: '', warning: '', preRows, postRows });
       } catch (err) {
         if (isAbortError(err)) {
@@ -417,10 +437,27 @@ function App() {
       if (loadedFlags[key]) return;
       setState((prev) => ({ ...prev, loading: true, error: '', warning: '' }));
       try {
-        const [preRows, postRows] = await Promise.all([
+        const [preResult, postResult] = await Promise.all([
           fetchSurveyRows(preTarget, controller.signal),
           fetchSurveyRows(postTarget, controller.signal)
         ]);
+        const preRows = preResult.rows;
+        const postRows = postResult.rows;
+        const sameSourceWarning =
+          preResult.meta?.target === postResult.meta?.target ||
+          (preRows.length && postRows.length && JSON.stringify(preRows) === JSON.stringify(postRows));
+
+        console.debug(`[motivationTask] ${label} loaded`, {
+          preTarget: preResult.meta?.target,
+          postTarget: postResult.meta?.target,
+          preCount: preRows.length,
+          postCount: postRows.length,
+          sameSourceWarning
+        });
+
+        if (sameSourceWarning) {
+          console.warn(`[motivationTask] ${label} pre/post 데이터가 동일하게 보입니다. target/env 매핑을 확인하세요.`);
+        }
         setState({ loading: false, error: '', warning: '', preRows, postRows });
       } catch (err) {
         if (isAbortError(err)) {
@@ -578,6 +615,12 @@ function App() {
 
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko-KR') || a.studentId.localeCompare(b.studentId, 'ko-KR'));
   }, [motivationComparisons, taskComparisons]);
+
+  const filteredMotivationTask = useMemo(() => {
+    const keyword = motivationNameFilter.trim().toLowerCase();
+    if (!keyword) return mergedMotivationTask;
+    return mergedMotivationTask.filter((item) => item.name.toLowerCase().includes(keyword));
+  }, [mergedMotivationTask, motivationNameFilter]);
 
   const onApplyStudentFilters = () => setAppliedStudentFilters(studentFilters);
   const onResetStudentFilters = () => {
@@ -908,9 +951,22 @@ function App() {
       {topTab === 'motivationTask' && (
         <section className="analytics-section">
           <section className="summary-grid three-col">
-            <article className="summary-card"><p className="summary-label">비교 대상 학생 수</p><p className="summary-value">{mergedMotivationTask.length}</p></article>
-            <article className="summary-card"><p className="summary-label">동기 향상 학생 수</p><p className="summary-value">{mergedMotivationTask.filter((v) => v.motivation?.status === 'improved').length}</p></article>
-            <article className="summary-card"><p className="summary-label">과제집착력 저하 학생 수</p><p className="summary-value">{mergedMotivationTask.filter((v) => v.task?.status === 'declined').length}</p></article>
+            <article className="summary-card"><p className="summary-label">비교 대상 학생 수</p><p className="summary-value">{filteredMotivationTask.length}</p></article>
+            <article className="summary-card"><p className="summary-label">동기 향상 학생 수</p><p className="summary-value">{filteredMotivationTask.filter((v) => v.motivation?.status === 'improved').length}</p></article>
+            <article className="summary-card"><p className="summary-label">과제집착력 저하 학생 수</p><p className="summary-value">{filteredMotivationTask.filter((v) => v.task?.status === 'declined').length}</p></article>
+          </section>
+
+          <section className="filter-panel">
+            <p className="panel-title">학생 이름으로 조회</p>
+            <label>
+              이름 입력
+              <input
+                type="text"
+                value={motivationNameFilter}
+                placeholder="예: 김대한"
+                onChange={(e) => setMotivationNameFilter(e.target.value)}
+              />
+            </label>
           </section>
 
           {(motivationState.loading || taskState.loading) && <article className="state-card loading">동기/과제집착력 데이터를 불러오는 중입니다...</article>}
@@ -931,24 +987,28 @@ function App() {
                       <th>동기 사전</th>
                       <th>동기 사후</th>
                       <th>동기 변화량</th>
+                      <th>동기 해석</th>
                       <th>과제집착 사전</th>
                       <th>과제집착 사후</th>
                       <th>과제집착 변화량</th>
+                      <th>과제집착 해석</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {mergedMotivationTask.map((item) => (
+                    {filteredMotivationTask.map((item) => (
                       <tr key={item.key}>
                         <td>{item.name} ({item.studentId || '학번 없음'})</td>
                         <td>{item.motivation?.preAvg ?? '-'}</td>
                         <td>{item.motivation?.postAvg ?? '-'}</td>
                         <td>{item.motivation?.delta ?? '-'}</td>
+                        <td>{interpretEngagementChange(item.motivation?.delta ?? null, '과학 활동 동기')}</td>
                         <td>{item.task?.preAvg ?? '-'}</td>
                         <td>{item.task?.postAvg ?? '-'}</td>
                         <td>{item.task?.delta ?? '-'}</td>
+                        <td>{interpretEngagementChange(item.task?.delta ?? null, '과제집착력')}</td>
                       </tr>
                     ))}
-                    {mergedMotivationTask.length === 0 && <tr><td colSpan={7}>비교 가능한 데이터가 부족합니다.</td></tr>}
+                    {filteredMotivationTask.length === 0 && <tr><td colSpan={9}>비교 가능한 데이터가 부족합니다.</td></tr>}
                   </tbody>
                 </table>
               </div>

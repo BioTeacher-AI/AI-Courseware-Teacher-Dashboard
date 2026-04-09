@@ -178,7 +178,17 @@ exports.handler = async function (event) {
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, data: parsed.value })
+      body: JSON.stringify({
+        ok: true,
+        data: parsed.value,
+        meta: {
+          target,
+          envKey: resolved.key,
+          status: response.status,
+          contentType,
+          redirected: response.redirected
+        }
+      })
     };
   } catch (error) {
     console.error('[proxy-survey] fetch error target:', target, 'message:', error?.message);
