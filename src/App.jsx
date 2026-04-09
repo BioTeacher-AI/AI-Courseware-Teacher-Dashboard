@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { comparePrePostResults } from './learningChangeUtils';
+import { compareLikertPrePostResults, comparePrePostResults } from './learningChangeUtils';
 
 const ANSWERS_API_URL = '/.netlify/functions/read-answers';
 
@@ -577,11 +577,11 @@ function App() {
     [misconceptionState.preRows, misconceptionState.postRows]
   );
   const motivationComparisons = useMemo(
-    () => comparePrePostResults(motivationState.preRows || [], motivationState.postRows || []),
+    () => compareLikertPrePostResults(motivationState.preRows || [], motivationState.postRows || [], 'motivation'),
     [motivationState.preRows, motivationState.postRows]
   );
   const taskComparisons = useMemo(
-    () => comparePrePostResults(taskState.preRows || [], taskState.postRows || []),
+    () => compareLikertPrePostResults(taskState.preRows || [], taskState.postRows || [], 'task'),
     [taskState.preRows, taskState.postRows]
   );
 
