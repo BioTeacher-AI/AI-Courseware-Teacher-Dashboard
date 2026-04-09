@@ -148,6 +148,14 @@ function getTeacherSuggestion(status, domainLabel) {
   return '비교 가능한 데이터가 부족합니다. 해당 학생의 사전/사후 기록 입력 여부를 확인해보실 수 있습니다.';
 }
 
+function inferLessonFromText(text) {
+  const raw = String(text || '').toLowerCase();
+  if (/소화|영양소|흡수/.test(raw)) return 'lesson1';
+  if (/순환|호흡|심박|기체|혈액|심장/.test(raw)) return 'lesson2';
+  if (/배설|콩팥|여과|오줌/.test(raw)) return 'lesson3';
+  return null;
+}
+
 function inferLessonFromRow(row) {
   const rawLesson = String(row?.lesson ?? '').toLowerCase().trim();
   if (LESSON_TOPIC_MAP[rawLesson]) return rawLesson;
@@ -165,14 +173,25 @@ function buildRemedialInput(studentComparison) {
   const preCounts = { lesson1: 0, lesson2: 0, lesson3: 0 };
   const postCounts = { lesson1: 0, lesson2: 0, lesson3: 0 };
 
-  studentComparison.preRows.forEach((row) => {
-    const lessonKey = inferLessonFromRow(row);
-    if (lessonKey) preCounts[lessonKey] += 1;
-  });
-  studentComparison.postRows.forEach((row) => {
-    const lessonKey = inferLessonFromRow(row);
-    if (lessonKey) postCounts[lessonKey] += 1;
-  });
+  if (Array.isArray(studentComparison.preMisconceptionItems) || Array.isArray(studentComparison.postMisconceptionItems)) {
+    (studentComparison.preMisconceptionItems || []).forEach((item) => {
+      const lessonKey = inferLessonFromText(item.question);
+      if (lessonKey) preCounts[lessonKey] += 1;
+    });
+    (studentComparison.postMisconceptionItems || []).forEach((item) => {
+      const lessonKey = inferLessonFromText(item.question);
+      if (lessonKey) postCounts[lessonKey] += 1;
+    });
+  } else {
+    studentComparison.preRows.forEach((row) => {
+      const lessonKey = inferLessonFromRow(row);
+      if (lessonKey) preCounts[lessonKey] += 1;
+    });
+    studentComparison.postRows.forEach((row) => {
+      const lessonKey = inferLessonFromRow(row);
+      if (lessonKey) postCounts[lessonKey] += 1;
+    });
+  }
 
   const lessonSummary = Object.keys(LESSON_TOPIC_MAP).map((lessonKey) => {
     const pre = preCounts[lessonKey] || 0;
@@ -776,6 +795,8 @@ function App() {
                 <p><strong>사후 평균 점수:</strong> {selectedMisconception.postAvg ?? '데이터 없음'}</p>
                 <p><strong>변화량:</strong> {selectedMisconception.delta ?? '계산 불가'}</p>
                 <p><strong>변화 분류:</strong> {selectedMisconception.status === 'improved' ? '향상' : selectedMisconception.status === 'same' ? '유지' : selectedMisconception.status === 'declined' ? '저하' : '비교 불가'}</p>
+                <p><strong>오개념 문항 수:</strong> 사전 {selectedMisconception.preMisconceptionItems?.length ?? 0} / 사후 {selectedMisconception.postMisconceptionItems?.length ?? 0}</p>
+                <p><strong>과학적 개념 문항 수:</strong> 사전 {selectedMisconception.preScientificItems?.length ?? 0} / 사후 {selectedMisconception.postScientificItems?.length ?? 0}</p>
               </div>
               <p className="teacher-suggestion"><strong>AI 추천 학습 제시:</strong> {getTeacherSuggestion(selectedMisconception.status, '학습 성취')}</p>
 
