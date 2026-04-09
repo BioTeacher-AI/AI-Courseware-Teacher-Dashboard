@@ -827,8 +827,14 @@ function App() {
         <section className="analytics-section">
           <section className="summary-grid three-col">
             <article className="summary-card"><p className="summary-label">비교 가능 학생 수</p><p className="summary-value">{filteredMisconceptionComparisons.length}</p></article>
-            <article className="summary-card"><p className="summary-label">향상 학생 수</p><p className="summary-value">{filteredMisconceptionComparisons.filter((v) => v.status === 'improved').length}</p></article>
-            <article className="summary-card"><p className="summary-label">데이터 부족 학생 수</p><p className="summary-value">{filteredMisconceptionComparisons.filter((v) => v.status === 'insufficient').length}</p></article>
+            <article className="summary-card">
+              <p className="summary-label">과학적 개념 확신 상승 학생 수</p>
+              <p className="summary-value">{filteredMisconceptionComparisons.filter((v) => (v.scientificDifference ?? 0) > 0).length}</p>
+            </article>
+            <article className="summary-card">
+              <p className="summary-label">오개념 확신 감소 학생 수</p>
+              <p className="summary-value">{filteredMisconceptionComparisons.filter((v) => (v.misconceptionDifference ?? 0) < 0).length}</p>
+            </article>
           </section>
 
           <section className="filter-panel">
@@ -926,24 +932,64 @@ function App() {
           )}
 
           {!misconceptionState.loading && !misconceptionState.error && !misconceptionState.warning && !selectedMisconception && (
-            <div className="table-wrap">
-              <table>
-                <thead><tr><th>학생</th><th>사전 평균</th><th>사후 평균</th><th>변화량</th><th>분류</th><th>교사용 제안</th></tr></thead>
-                <tbody>
-                  {filteredMisconceptionComparisons.map((item) => (
-                    <tr key={item.key}>
-                      <td>{item.name} ({item.studentId || '학번 없음'})</td>
-                      <td>{item.preAvg ?? '-'}</td>
-                      <td>{item.postAvg ?? '-'}</td>
-                      <td>{item.delta ?? '-'}</td>
-                      <td>{item.status === 'improved' ? '향상' : item.status === 'same' ? '유지' : item.status === 'declined' ? '저하' : '비교 불가'}</td>
-                      <td>{getTeacherSuggestion(item.status, '학습 성취')}</td>
+            <>
+              <section className="summary-grid two-col">
+                <article className="summary-card">
+                  <p className="summary-label">과학적 개념 평균 변화량(전체)</p>
+                  <p className="summary-value">
+                    {formatNumber(
+                      average(
+                        filteredMisconceptionComparisons
+                          .map((item) => item.scientificDifference)
+                          .filter((value) => value !== null && value !== undefined)
+                      )
+                    ) ?? '-'}
+                  </p>
+                </article>
+                <article className="summary-card">
+                  <p className="summary-label">오개념 평균 변화량(전체)</p>
+                  <p className="summary-value">
+                    {formatNumber(
+                      average(
+                        filteredMisconceptionComparisons
+                          .map((item) => item.misconceptionDifference)
+                          .filter((value) => value !== null && value !== undefined)
+                      )
+                    ) ?? '-'}
+                  </p>
+                </article>
+              </section>
+
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>학생</th>
+                      <th>과학적 개념 확신도 (사전/사후/변화량)</th>
+                      <th>과학적 개념 해석</th>
+                      <th>오개념 확신도 (사전/사후/변화량)</th>
+                      <th>오개념 해석</th>
                     </tr>
-                  ))}
-                  {filteredMisconceptionComparisons.length === 0 && <tr><td colSpan={6}>비교 가능한 데이터가 부족합니다.</td></tr>}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filteredMisconceptionComparisons.map((item) => (
+                      <tr key={item.key}>
+                        <td>{item.name} ({item.studentId || '학번 없음'})</td>
+                        <td>
+                          사전 {item.preScientificAverage ?? '-'} / 사후 {item.postScientificAverage ?? '-'} / 변화량 {item.scientificDifference ?? '-'}
+                        </td>
+                        <td>{interpretScientificConfidence(item.scientificDifference)}</td>
+                        <td>
+                          사전 {item.preMisconceptionAverage ?? '-'} / 사후 {item.postMisconceptionAverage ?? '-'} / 변화량 {item.misconceptionDifference ?? '-'}
+                        </td>
+                        <td>{interpretMisconceptionConfidence(item.misconceptionDifference)}</td>
+                      </tr>
+                    ))}
+                    {filteredMisconceptionComparisons.length === 0 && <tr><td colSpan={5}>비교 가능한 데이터가 부족합니다.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
       )}
