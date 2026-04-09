@@ -249,6 +249,10 @@ function buildStudentComparisons(preRows, postRows) {
     .sort((a, b) => a.name.localeCompare(b.name, 'ko-KR') || a.studentId.localeCompare(b.studentId, 'ko-KR'));
 }
 
+function isAbortError(error) {
+  return error?.name === 'AbortError' || String(error?.message || '').includes('aborted');
+}
+
 async function fetchSurveyRows(target, signal) {
   const endpoint = `${SURVEY_PROXY_BASE}?target=${encodeURIComponent(target)}`;
   const res = await fetch(endpoint, { cache: 'no-store', signal });
@@ -343,6 +347,10 @@ function App() {
         ]);
         setMisconceptionState({ loading: false, error: '', warning: '', preRows, postRows });
       } catch (err) {
+        if (isAbortError(err)) {
+          console.debug('[learningChange] misconception fetch aborted (cleanup).');
+          return;
+        }
         console.error('학습 변화 데이터 조회 오류:', err);
         const message = String(err?.message || '');
         const warning = message.includes('환경변수가 설정되지 않았습니다')
@@ -356,7 +364,9 @@ function App() {
           postRows: []
         });
       } finally {
-        setLoadedFlags((prev) => ({ ...prev, misconception: true }));
+        if (!controller.signal.aborted) {
+          setLoadedFlags((prev) => ({ ...prev, misconception: true }));
+        }
       }
     }
 
@@ -366,9 +376,10 @@ function App() {
 
   useEffect(() => {
     if (topTab !== 'motivationTask') return;
-    const controller = new AbortController();
+    const motivationController = new AbortController();
+    const taskController = new AbortController();
 
-    async function loadPairOnce({ key, preTarget, postTarget, setState, label }) {
+    async function loadPairOnce({ key, preTarget, postTarget, setState, label, controller }) {
       if (loadedFlags[key]) return;
       setState((prev) => ({ ...prev, loading: true, error: '', warning: '' }));
       try {
@@ -378,6 +389,10 @@ function App() {
         ]);
         setState({ loading: false, error: '', warning: '', preRows, postRows });
       } catch (err) {
+        if (isAbortError(err)) {
+          console.debug(`[motivationTask] ${label} fetch aborted (cleanup).`);
+          return;
+        }
         console.error(`${label} 데이터 조회 오류:`, err);
         const message = String(err?.message || '');
         const warning = message.includes('환경변수가 설정되지 않았습니다')
@@ -391,7 +406,9 @@ function App() {
           postRows: []
         });
       } finally {
-        setLoadedFlags((prev) => ({ ...prev, [key]: true }));
+        if (!controller.signal.aborted) {
+          setLoadedFlags((prev) => ({ ...prev, [key]: true }));
+        }
       }
     }
 
@@ -400,16 +417,21 @@ function App() {
       preTarget: 'motivation-pre',
       postTarget: 'motivation-post',
       setState: setMotivationState,
-      label: '동기'
+      label: '동기',
+      controller: motivationController
     });
     loadPairOnce({
       key: 'task',
       preTarget: 'task-pre',
       postTarget: 'task-post',
       setState: setTaskState,
-      label: '과제집착력'
+      label: '과제집착력',
+      controller: taskController
     });
-    return () => controller.abort();
+    return () => {
+      motivationController.abort();
+      taskController.abort();
+    };
   }, [topTab, loadedFlags]);
 
   const studentFilteredRows = useMemo(() => {
