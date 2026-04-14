@@ -340,6 +340,58 @@ th {
   gap: 8px;
 }
 
+.insight-head-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.change-status-panel {
+  min-width: 240px;
+  border: 1px solid #dbe6fb;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fbff;
+}
+
+.status-row {
+  margin: 8px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-stack {
+  display: grid;
+  gap: 6px;
+}
+
+.status-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.status-badge.good {
+  background: #e6f6ee;
+  color: #1f6b47;
+}
+
+.status-badge.bad {
+  background: #fdecec;
+  color: #9d2f2f;
+}
+
+.status-badge.neutral {
+  background: #eef2f8;
+  color: #566883;
+}
+
 .double-card-grid {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }

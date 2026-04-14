@@ -182,6 +182,30 @@ function interpretEngagementChange(diff, label) {
   return `${label} 점수 변화가 크지 않아 유지 수준으로 볼 수 있습니다.`;
 }
 
+function getDirectionalStatus(value) {
+  const numeric = toNumber(value);
+  if (numeric === null) return 'unavailable';
+  if (numeric > 0) return 'increase';
+  if (numeric < 0) return 'decrease';
+  return 'same';
+}
+
+function getStatusText(status) {
+  if (status === 'increase') return '증가';
+  if (status === 'decrease') return '감소';
+  if (status === 'same') return '동일';
+  return '비교 불가';
+}
+
+function getStatusClassByDomain(status, domain) {
+  if (status === 'same' || status === 'unavailable') return 'status-badge neutral';
+  if (domain === 'scientific') {
+    return status === 'increase' ? 'status-badge good' : 'status-badge bad';
+  }
+  // misconception: 감소가 긍정, 증가가 부정
+  return status === 'decrease' ? 'status-badge good' : 'status-badge bad';
+}
+
 function inferLessonFromText(text) {
   const raw = String(text || '').toLowerCase();
   if (/소화|영양소|흡수/.test(raw)) return 'lesson1';
@@ -874,15 +898,32 @@ function App() {
           {!misconceptionState.loading && !misconceptionState.error && !misconceptionState.warning && selectedMisconception && (
             <article className="insight-card">
               <h3>{selectedMisconception.name} ({selectedMisconception.studentId || '학번 없음'})</h3>
-              <div className="insight-grid">
-                <p><strong>과학적 개념 확신도(사전):</strong> {formatNumber(selectedMisconception.preScientificAverage)}</p>
-                <p><strong>과학적 개념 확신도(사후):</strong> {formatNumber(selectedMisconception.postScientificAverage)}</p>
-                <p><strong>과학적 개념 변화량:</strong> {formatNumber(selectedMisconception.scientificDifference)}</p>
-                <p><strong>오개념 확신도(사전):</strong> {formatNumber(selectedMisconception.preMisconceptionAverage)}</p>
-                <p><strong>오개념 확신도(사후):</strong> {formatNumber(selectedMisconception.postMisconceptionAverage)}</p>
-                <p><strong>오개념 변화량:</strong> {formatNumber(selectedMisconception.misconceptionDifference)}</p>
-                <p><strong>오개념 문항 수:</strong> 사전 {selectedMisconception.preMisconceptionItems?.length ?? 0} / 사후 {selectedMisconception.postMisconceptionItems?.length ?? 0}</p>
-                <p><strong>과학적 개념 문항 수:</strong> 사전 {selectedMisconception.preScientificItems?.length ?? 0} / 사후 {selectedMisconception.postScientificItems?.length ?? 0}</p>
+              <div className="insight-head-row">
+                <div className="insight-grid">
+                  <p><strong>과학적 개념 확신도(사전):</strong> {formatNumber(selectedMisconception.preScientificAverage)}</p>
+                  <p><strong>과학적 개념 확신도(사후):</strong> {formatNumber(selectedMisconception.postScientificAverage)}</p>
+                  <p><strong>과학적 개념 변화량:</strong> {formatNumber(selectedMisconception.scientificDifference)}</p>
+                  <p><strong>오개념 확신도(사전):</strong> {formatNumber(selectedMisconception.preMisconceptionAverage)}</p>
+                  <p><strong>오개념 확신도(사후):</strong> {formatNumber(selectedMisconception.postMisconceptionAverage)}</p>
+                  <p><strong>오개념 변화량:</strong> {formatNumber(selectedMisconception.misconceptionDifference)}</p>
+                  <p><strong>오개념 문항 수:</strong> 사전 {selectedMisconception.preMisconceptionItems?.length ?? 0} / 사후 {selectedMisconception.postMisconceptionItems?.length ?? 0}</p>
+                  <p><strong>과학적 개념 문항 수:</strong> 사전 {selectedMisconception.preScientificItems?.length ?? 0} / 사후 {selectedMisconception.postScientificItems?.length ?? 0}</p>
+                </div>
+                <aside className="change-status-panel">
+                  <p className="panel-title">변화 상태</p>
+                  <p className="status-row">
+                    <span>과학적 개념 확신도</span>
+                    <span className={getStatusClassByDomain(getDirectionalStatus(selectedMisconception.scientificDifference), 'scientific')}>
+                      {getStatusText(getDirectionalStatus(selectedMisconception.scientificDifference))}
+                    </span>
+                  </p>
+                  <p className="status-row">
+                    <span>오개념 확신도</span>
+                    <span className={getStatusClassByDomain(getDirectionalStatus(selectedMisconception.misconceptionDifference), 'misconception')}>
+                      {getStatusText(getDirectionalStatus(selectedMisconception.misconceptionDifference))}
+                    </span>
+                  </p>
+                </aside>
               </div>
               <p className="teacher-suggestion"><strong>AI 추천 학습 제시:</strong> {getTeacherSuggestion(selectedMisconception.status, '학습 성취')}</p>
               <p className="teacher-suggestion"><strong>과학적 개념 해석:</strong> {interpretScientificConfidence(selectedMisconception.scientificDifference)}</p>
@@ -990,6 +1031,7 @@ function App() {
                       <th>과학적 개념 해석</th>
                       <th>오개념 확신도 (사전/사후/변화량)</th>
                       <th>오개념 해석</th>
+                      <th>변화 상태</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1004,9 +1046,19 @@ function App() {
                           사전 {formatNumber(item.preMisconceptionAverage)} / 사후 {formatNumber(item.postMisconceptionAverage)} / 변화량 {formatNumber(item.misconceptionDifference)}
                         </td>
                         <td>{interpretMisconceptionConfidence(item.misconceptionDifference)}</td>
+                        <td>
+                          <div className="status-stack">
+                            <span className={getStatusClassByDomain(getDirectionalStatus(item.scientificDifference), 'scientific')}>
+                              과학적 개념: {getStatusText(getDirectionalStatus(item.scientificDifference))}
+                            </span>
+                            <span className={getStatusClassByDomain(getDirectionalStatus(item.misconceptionDifference), 'misconception')}>
+                              오개념: {getStatusText(getDirectionalStatus(item.misconceptionDifference))}
+                            </span>
+                          </div>
+                        </td>
                       </tr>
                     ))}
-                    {filteredMisconceptionComparisons.length === 0 && <tr><td colSpan={5}>비교 가능한 데이터가 부족합니다.</td></tr>}
+                    {filteredMisconceptionComparisons.length === 0 && <tr><td colSpan={6}>비교 가능한 데이터가 부족합니다.</td></tr>}
                   </tbody>
                 </table>
               </div>
