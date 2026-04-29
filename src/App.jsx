@@ -291,6 +291,46 @@ function buildRemedialInput(studentComparison) {
   };
 }
 
+function parseL2OpenQ2Vessels(answer) {
+  if (typeof answer !== 'string') return null;
+  const text = answer.trim();
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed?.vessels)) return null;
+    return parsed.vessels;
+  } catch {
+    return null;
+  }
+}
+
+function renderAnswerContent(row) {
+  const questionId = String(row?.questionId ?? '');
+  const answer = row?.answer;
+
+  if (questionId !== 'L2_Open_Q2') {
+    return <p className="answer-text">{answer || '(답안 없음)'}</p>;
+  }
+
+  const vessels = parseL2OpenQ2Vessels(answer);
+  if (vessels === null) {
+    return <p className="answer-text">{answer || '(답안 없음)'}</p>;
+  }
+  if (!vessels.length) {
+    return <p className="answer-text">작성된 혈관별 산소량 응답이 없습니다.</p>;
+  }
+
+  return (
+    <div className="answer-text vessel-answer-list">
+      {vessels.map((item, idx) => (
+        <p key={`${item?.vesselName || '혈관'}-${idx}`} className="vessel-answer-item">
+          <strong>{item?.vesselName || '혈관 미상'}:</strong> {item?.oxygenLevel || '-'}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function buildStudentComparisons(preRows, postRows) {
   const map = new Map();
 
@@ -819,7 +859,7 @@ function App() {
                       <div className="answer-meta"><span>{row.name || '-'}</span><span>{row.studentId || '-'}</span><span className="badge lesson">{row.lesson || '-'}</span><span className="badge section">{row.section || '-'}</span><span>{formatTimestamp(row.timestamp)}</span></div>
                       <p className="question-id">{row.questionId || '-'}</p>
                       <h3 className="question-text">{row.questionText || '(질문 없음)'}</h3>
-                      <p className="answer-text">{row.answer || '(답안 없음)'}</p>
+                      {renderAnswerContent(row)}
                     </article>
                   ))}
                 </div>
@@ -836,7 +876,7 @@ function App() {
                             <div className="answer-meta"><span className="badge lesson">{row.lesson || '-'}</span><span className="badge section">{row.section || '-'}</span><span>{formatTimestamp(row.timestamp)}</span></div>
                             <p className="question-id">{row.questionId || '-'}</p>
                             <p className="question-text">{row.questionText || '(질문 없음)'}</p>
-                            <p className="answer-text">{row.answer || '(답안 없음)'}</p>
+                            {renderAnswerContent(row)}
                           </div>
                         ))}
                       </div>
@@ -857,7 +897,7 @@ function App() {
                     {group.answers.map((row, idx) => (
                       <div className="question-answer-item" key={`${row.studentId}-${row.timestamp}-${idx}`}>
                         <div className="answer-meta"><span className="student-name">{row.name || '-'}</span><span>{row.studentId || '-'}</span><span>{formatTimestamp(row.timestamp)}</span></div>
-                        <p className="answer-text">{row.answer || '(답안 없음)'}</p>
+                        {renderAnswerContent(row)}
                       </div>
                     ))}
                   </div>

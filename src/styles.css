@@ -233,6 +233,15 @@ button {
   line-height: 1.5;
 }
 
+.vessel-answer-list {
+  display: grid;
+  gap: 6px;
+}
+
+.vessel-answer-item {
+  margin: 0;
+}
+
 .student-header h3 {
   margin: 0;
 }
