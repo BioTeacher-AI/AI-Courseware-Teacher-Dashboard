@@ -47,6 +47,49 @@ function sortByLatest(rows) {
   });
 }
 
+
+function renderL2OpenQ2Answer(rawAnswer) {
+  const fallbackText = String(rawAnswer ?? '').trim() || '(답안 없음)';
+
+  if (typeof rawAnswer !== 'string') {
+    return <p className="answer-text">{fallbackText}</p>;
+  }
+
+  try {
+    const parsed = JSON.parse(rawAnswer);
+    const vessels = Array.isArray(parsed?.vessels) ? parsed.vessels : [];
+
+    if (vessels.length === 0) {
+      return <p className="answer-text">작성된 혈관별 산소량 응답이 없습니다.</p>;
+    }
+
+    return (
+      <div className="answer-text vessel-answer-list">
+        {vessels.map((vessel, idx) => {
+          const vesselName = String(vessel?.vesselName ?? '').trim() || `혈관 ${idx + 1}`;
+          const oxygenLevel = String(vessel?.oxygenLevel ?? '').trim() || '-';
+
+          return (
+            <p className="vessel-answer-item" key={`${vesselName}-${idx}`}>
+              <strong>{vesselName}</strong>: {oxygenLevel}
+            </p>
+          );
+        })}
+      </div>
+    );
+  } catch {
+    return <p className="answer-text">{fallbackText}</p>;
+  }
+}
+
+function renderAnswer(row) {
+  if (row?.questionId === 'L2_Open_Q2') {
+    return renderL2OpenQ2Answer(row.answer);
+  }
+
+  return <p className="answer-text">{row?.answer || '(답안 없음)'}</p>;
+}
+
 function App() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -293,7 +336,7 @@ function App() {
                   </div>
                   <p className="question-id">{row.questionId || '-'}</p>
                   <h3 className="question-text">{row.questionText || '(질문 없음)'}</h3>
-                  <p className="answer-text">{row.answer || '(답안 없음)'}</p>
+                  {renderAnswer(row)}
                 </article>
               ))}
             </div>
@@ -318,7 +361,7 @@ function App() {
                         </div>
                         <p className="question-id">{row.questionId || '-'}</p>
                         <p className="question-text">{row.questionText || '(질문 없음)'}</p>
-                        <p className="answer-text">{row.answer || '(답안 없음)'}</p>
+                        {renderAnswer(row)}
                       </div>
                     ))}
                   </div>
